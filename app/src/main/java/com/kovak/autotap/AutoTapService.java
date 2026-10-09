@@ -21,19 +21,34 @@ public class AutoTapService extends AccessibilityService {
 
     private Handler droneHandler = new Handler(Looper.getMainLooper());
     private Handler moveHandler = new Handler(Looper.getMainLooper());
+    private Handler startHandler = new Handler(Looper.getMainLooper());
+    private Handler skillHandler = new Handler(Looper.getMainLooper());
+    private Handler rotateHandler = new Handler(Looper.getMainLooper());
+
     private boolean droneRunning = false;
     private boolean moveRunning = false;
+    private boolean startRunning = false;
+    private boolean skillRunning = false;
+    private boolean rotateRunning = false;
+
+    private int rotateDirection = 1;
     private final Random random = new Random();
 
     public float droneXPercent = 0.79f;
     public float droneYPercent = 0.83f;
     public int droneIntervalMs = 61000;
+
+    public float startXPercent = 0.87f;
+    public float startYPercent = 0.89f;
+
+    public float skillXPercent = 0.80f;
+    public float skillYPercent = 0.87f;
+
     public boolean randomize = true;
     public boolean vibrateOnTap = true;
     public int tapCount = 0;
     public long startTime = 0;
 
-    // Active move directions (can be multiple)
     public boolean fwdActive = false;
     public boolean rightActive = false;
     public boolean liftActive = false;
@@ -42,12 +57,12 @@ public class AutoTapService extends AccessibilityService {
     public static final int DIR_RIGHT = 2;
     public static final int DIR_LIFT = 3;
 
-    // Custom buttons
+    // ============ CUSTOM BUTTON ============
     public static class CustomBtn {
         public String name;
         public float xPercent;
         public float yPercent;
-        public long intervalMs; // 0 = manual only
+        public long intervalMs;
         public boolean loop;
         public boolean running;
         public Handler handler;
@@ -79,6 +94,9 @@ public class AutoTapService extends AccessibilityService {
         instance = null;
         droneRunning = false;
         moveRunning = false;
+        startRunning = false;
+        skillRunning = false;
+        rotateRunning = false;
         super.onDestroy();
     }
 
@@ -90,7 +108,6 @@ public class AutoTapService extends AccessibilityService {
         randomize = p.getBoolean("randomize", true);
         vibrateOnTap = p.getBoolean("vibrate", true);
 
-        // Load custom buttons
         customBtns.clear();
         String json = p.getString("custom_btns", "[]");
         try {
@@ -176,7 +193,6 @@ public class AutoTapService extends AccessibilityService {
         if (droneRunning) return;
         droneRunning = true;
         startTime = System.currentTimeMillis();
-        // Immediate first tap
         droneTap();
         droneLoop();
     }
@@ -200,7 +216,87 @@ public class AutoTapService extends AccessibilityService {
         }, delay);
     }
 
-    // ============ MOVEMENT (multiple parallel) ============
+    // ============ START BUTTON 9 min ============
+    public void startStartButton() {
+        if (startRunning) return;
+        startRunning = true;
+        startTapLoop();
+    }
+
+    public void stopStartButton() {
+        startRunning = false;
+        startHandler.removeCallbacksAndMessages(null);
+    }
+
+    public boolean isStartRunning() { return startRunning; }
+
+    private void startTapLoop() {
+        if (!startRunning) return;
+        int w = getResources().getDisplayMetrics().widthPixels;
+        int h = getResources().getDisplayMetrics().heightPixels;
+        tap(w * startXPercent, h * startYPercent);
+        startHandler.postDelayed(this::startTapLoop, 9 * 60 * 1000L);
+    }
+
+    // ============ SKILL BUTTON 90 sec ============
+    public void startSkillButton() {
+        if (skillRunning) return;
+        skillRunning = true;
+        skillTapLoop();
+    }
+
+    public void stopSkillButton() {
+        skillRunning = false;
+        skillHandler.removeCallbacksAndMessages(null);
+    }
+
+    public boolean isSkillRunning() { return skillRunning; }
+
+    private void skillTapLoop() {
+        if (!skillRunning) return;
+        int w = getResources().getDisplayMetrics().widthPixels;
+        int h = getResources().getDisplayMetrics().heightPixels;
+        tap(w * skillXPercent, h * skillYPercent);
+        skillHandler.postDelayed(this::skillTapLoop, 90 * 1000L);
+    }
+
+    // ============ ROTATE 120° ============
+    public void startRotate() {
+        if (rotateRunning) return;
+        rotateRunning = true;
+        rotateLoop();
+    }
+
+    public void stopRotate() {
+        rotateRunning = false;
+        rotateHandler.removeCallbacksAndMessages(null);
+    }
+
+    public boolean isRotateRunning() { return rotateRunning; }
+
+    private void rotateLoop() {
+        if (!rotateRunning) return;
+        int w = getResources().getDisplayMetrics().widthPixels;
+        int h = getResources().getDisplayMetrics().heightPixels;
+
+        float y = h * 0.45f;
+        float cx = w * 0.85f;
+
+        for (int i = 0; i < 3; i++) {
+            if (!rotateRunning) return;
+            if (rotateDirection == 1) {
+                swipe(cx + w * 0.05f, y, cx - w * 0.05f, y, 200);
+            } else {
+                swipe(cx - w * 0.05f, y, cx + w * 0.05f, y, 200);
+            }
+            try { Thread.sleep(60); } catch (Exception e) {}
+        }
+
+        rotateDirection = -rotateDirection;
+        rotateHandler.postDelayed(this::rotateLoop, 1500);
+    }
+
+    // ============ MOVE ============
     public void updateMove() {
         boolean any = fwdActive || rightActive || liftActive;
         if (any && !moveRunning) {
@@ -219,7 +315,6 @@ public class AutoTapService extends AccessibilityService {
         float jx = w * 0.18f;
         float jy = h * 0.78f;
 
-        // Fire all active directions
         if (fwdActive) {
             swipe(jx, jy, jx, jy - h * 0.10f, 300 + random.nextInt(200));
         }
@@ -264,7 +359,6 @@ public class AutoTapService extends AccessibilityService {
         if (b.loop && b.intervalMs > 0) {
             customLoop(b);
         } else {
-            // single shot
             customTap(b);
             b.running = false;
         }
