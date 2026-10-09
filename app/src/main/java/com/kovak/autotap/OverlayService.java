@@ -318,6 +318,7 @@ public class OverlayService extends Service {
         // ---- AUTO LAUNCH SLOT ----
         LinearLayout slotLaunch = makeSlot("AUTO LAUNCH  ·  15s each");
         
+        // force rebuild
         TextView[] altOut = new TextView[1];
         slotLaunch.addView(makeRow("FF ↔ FF MAX", "OFF", altOut, v -> toggleAlt()));
         altState = altOut[0];
