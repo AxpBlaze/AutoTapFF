@@ -1,0 +1,26 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace "com.kovak.autotap"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.kovak.autotap"
+        minSdk 24
+        targetSdk 30
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
