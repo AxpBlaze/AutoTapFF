@@ -34,6 +34,8 @@ public class OverlayService extends Service {
     private TextView rotP120, rotN120, rotP360, rotP210;
     private TextView statsText;
     private TextView apiStatusText, apiExpiryText;
+    private TextView ffState, ffMaxState;
+    private boolean ffOn, ffMaxOn;
 
     private boolean droneOn, startOn, skillOn, fwdOn, rightOn, liftOn;
     private int activeRotate = -1; // -1 = none, 0/1/2/3 = mode
@@ -302,6 +304,19 @@ public class OverlayService extends Service {
         setApiBtn.setOnClickListener(v -> showApiKeyDialog());
         slot4.addView(setApiBtn);
         rootLayout.addView(slot4);
+
+        // ---- AUTO LAUNCH SLOT ----
+        LinearLayout slotLaunch = makeSlot("AUTO LAUNCH  ·  8s");
+        
+        TextView[] ffOut = new TextView[1];
+        slotLaunch.addView(makeRow("FREE FIRE", "OFF", ffOut, v -> toggleFF()));
+        ffState = ffOut[0];
+
+        TextView[] ffMaxOut = new TextView[1];
+        slotLaunch.addView(makeRow("FREE FIRE MAX", "OFF", ffMaxOut, v -> toggleFFMax()));
+        ffMaxState = ffMaxOut[0];
+
+        rootLayout.addView(slotLaunch);
 
         // ---- SLOT 5: SYSTEM ----
         LinearLayout slot5 = makeSlot("SYSTEM");
@@ -882,12 +897,41 @@ public class OverlayService extends Service {
         }
     }
 
+    private void toggleFF() {
+        if (!checkApi()) return;
+        AutoTapService s = AutoTapService.instance;
+        if (s == null) return;
+        ffOn = !ffOn;
+        if (ffOn) {
+            s.startFFLaunch();
+            setBtn(ffState, true, "ON · 8s");
+        } else {
+            s.stopFFLaunch();
+            setBtn(ffState, false, "OFF");
+        }
+    }
+
+    private void toggleFFMax() {
+        if (!checkApi()) return;
+        AutoTapService s = AutoTapService.instance;
+        if (s == null) return;
+        ffMaxOn = !ffMaxOn;
+        if (ffMaxOn) {
+            s.startFFMaxLaunch();
+            setBtn(ffMaxState, true, "ON · 8s");
+        } else {
+            s.stopFFMaxLaunch();
+            setBtn(ffMaxState, false, "OFF");
+        }
+    }
+
     @Override
     public void onDestroy() {
         super.onDestroy();
         AutoTapService s = AutoTapService.instance;
         if (s != null) {
             s.stopDrone(); s.stopStartButton(); s.stopSkillButton(); s.stopRotate();
+            s.stopFFLaunch(); s.stopFFMaxLaunch();
             s.saveConfig();
         }
         if (overlay != null) { try { wm.removeView(overlay); } catch (Exception e) {} }

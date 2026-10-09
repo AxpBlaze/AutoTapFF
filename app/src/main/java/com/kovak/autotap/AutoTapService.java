@@ -86,6 +86,65 @@ public class AutoTapService extends AccessibilityService {
     @Override public void onAccessibilityEvent(AccessibilityEvent e) {}
     @Override public void onInterrupt() {}
 
+    // ============ AUTO-LAUNCH FF / FF MAX (every 8 sec) ============
+    private Handler ffLaunchHandler = new Handler(Looper.getMainLooper());
+    private Handler ffMaxLaunchHandler = new Handler(Looper.getMainLooper());
+    private boolean ffLaunchRunning = false;
+    private boolean ffMaxLaunchRunning = false;
+
+    public static final String PKG_FF = "com.dts.freefireth";
+    public static final String PKG_FFMAX = "com.dts.freefiremax";
+
+    public void startFFLaunch() {
+        if (ffLaunchRunning) return;
+        ffLaunchRunning = true;
+        ffLaunchLoop();
+    }
+
+    public void stopFFLaunch() {
+        ffLaunchRunning = false;
+        ffLaunchHandler.removeCallbacksAndMessages(null);
+    }
+
+    public boolean isFFLaunchRunning() { return ffLaunchRunning; }
+
+    private void ffLaunchLoop() {
+        if (!ffLaunchRunning) return;
+        launchApp(PKG_FF);
+        ffLaunchHandler.postDelayed(this::ffLaunchLoop, 8000);
+    }
+
+    public void startFFMaxLaunch() {
+        if (ffMaxLaunchRunning) return;
+        ffMaxLaunchRunning = true;
+        ffMaxLaunchLoop();
+    }
+
+    public void stopFFMaxLaunch() {
+        ffMaxLaunchRunning = false;
+        ffMaxLaunchHandler.removeCallbacksAndMessages(null);
+    }
+
+    public boolean isFFMaxLaunchRunning() { return ffMaxLaunchRunning; }
+
+    private void ffMaxLaunchLoop() {
+        if (!ffMaxLaunchRunning) return;
+        launchApp(PKG_FFMAX);
+        ffMaxLaunchHandler.postDelayed(this::ffMaxLaunchLoop, 8000);
+    }
+
+    private void launchApp(String packageName) {
+        try {
+            android.content.Intent intent = getPackageManager()
+                    .getLaunchIntentForPackage(packageName);
+            if (intent != null) {
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        | android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+                startActivity(intent);
+            }
+        } catch (Exception e) {}
+    }
+
     @Override
     public void onDestroy() {
         instance = null;
@@ -94,6 +153,8 @@ public class AutoTapService extends AccessibilityService {
         startRunning = false;
         skillRunning = false;
         rotateRunning = false;
+        ffLaunchRunning = false;
+        ffMaxLaunchRunning = false;
         super.onDestroy();
     }
 
