@@ -45,11 +45,13 @@ public class OverlayService extends Service {
     private View pickerView;
     private String pendingPickerType = null;
 
-    // ============ CYAN THEME ============
+    // Cyan theme
     private static final int C_BG1       = 0xF0050A12;
     private static final int C_BG2       = 0xF0000208;
     private static final int C_BORDER    = 0xFF00E5FF;
     private static final int C_SURFACE   = 0xFF0A1A22;
+    private static final int C_SLOT_BG   = 0xF0050F15;
+    private static final int C_SLOT_BRD  = 0x5500E5FF;
     private static final int C_TEXT      = 0xFFFFFFFF;
     private static final int C_MUTED     = 0xFF7DD3E0;
     private static final int C_DIM       = 0xFF5B7A88;
@@ -74,26 +76,48 @@ public class OverlayService extends Service {
         startApiRefresh();
     }
 
-    private GradientDrawable bgGrad(int c1, int c2, float radius) {
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{c1, c2});
-        g.setCornerRadius(radius);
+    private GradientDrawable bgGrad(int c1, int c2, float r) {
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{c1, c2});
+        g.setCornerRadius(r);
         return g;
     }
-
-    private GradientDrawable bgSolid(int color, float radius) {
+    private GradientDrawable bgSolid(int c, float r) {
         GradientDrawable g = new GradientDrawable();
-        g.setColor(color);
-        g.setCornerRadius(radius);
-        return g;
+        g.setColor(c); g.setCornerRadius(r); return g;
+    }
+    private GradientDrawable bgStroke(int fill, int stroke, float r) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(fill); g.setCornerRadius(r); g.setStroke(2, stroke); return g;
     }
 
-    private GradientDrawable bgStroke(int fill, int stroke, float radius) {
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(fill);
-        g.setCornerRadius(radius);
-        g.setStroke(2, stroke);
-        return g;
+    // ---- Slot container ----
+    private LinearLayout makeSlot(String title) {
+        LinearLayout slot = new LinearLayout(this);
+        slot.setOrientation(LinearLayout.VERTICAL);
+        slot.setPadding(20, 14, 20, 14);
+
+        GradientDrawable sb = new GradientDrawable();
+        sb.setColor(C_SLOT_BG);
+        sb.setCornerRadius(20f);
+        sb.setStroke(2, C_SLOT_BRD);
+        slot.setBackground(sb);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 6, 0, 6);
+        slot.setLayoutParams(lp);
+
+        TextView t = new TextView(this);
+        t.setText(title);
+        t.setTextColor(C_HEADER);
+        t.setTextSize(9f);
+        t.setLetterSpacing(0.2f);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setPadding(0, 0, 0, 8);
+        slot.addView(t);
+
+        return slot;
     }
 
     private LinearLayout makeRow(String labelText, String btnText, TextView[] stateOut,
@@ -112,8 +136,7 @@ public class OverlayService extends Service {
         label.setTextColor(C_MUTED);
         label.setTextSize(11f);
         label.setTypeface(Typeface.DEFAULT_BOLD);
-        label.setLayoutParams(new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        label.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         row.addView(label);
 
         TextView btn = new TextView(this);
@@ -122,10 +145,10 @@ public class OverlayService extends Service {
         btn.setTextSize(11f);
         btn.setTypeface(Typeface.DEFAULT_BOLD);
         btn.setGravity(Gravity.CENTER);
-        btn.setPadding(24, 16, 24, 16);
-        btn.setBackground(bgStroke(C_CYAN_BG, C_BORDER, 24f));
-        btn.setElevation(4f);
-        btn.setMinWidth(120);
+        btn.setPadding(24, 14, 24, 14);
+        btn.setBackground(bgStroke(C_CYAN_BG, C_BORDER, 22f));
+        btn.setElevation(3f);
+        btn.setMinWidth(115);
         btn.setOnClickListener(listener);
         row.addView(btn);
 
@@ -139,17 +162,18 @@ public class OverlayService extends Service {
 
         rootLayout = new LinearLayout(this);
         rootLayout.setOrientation(LinearLayout.VERTICAL);
-        rootLayout.setPadding(32, 28, 32, 28);
+        rootLayout.setPadding(24, 20, 24, 20);
 
-        GradientDrawable containerBg = bgGrad(C_BG1, C_BG2, 42f);
-        containerBg.setStroke(3, C_BORDER);
-        rootLayout.setBackground(containerBg);
+        GradientDrawable cb = bgGrad(C_BG1, C_BG2, 42f);
+        cb.setStroke(3, C_BORDER);
+        rootLayout.setBackground(cb);
         rootLayout.setElevation(25f);
 
-        // Header
+        // ---- Header (drag handle) ----
         LinearLayout headerRow = new LinearLayout(this);
         headerRow.setOrientation(LinearLayout.HORIZONTAL);
         headerRow.setGravity(Gravity.CENTER_VERTICAL);
+        headerRow.setPadding(8, 6, 8, 12);
 
         TextView dot = new TextView(this);
         dot.setText("◆");
@@ -160,13 +184,145 @@ public class OverlayService extends Service {
         TextView header = new TextView(this);
         header.setText("  AXP · GAMING PANEL");
         header.setTextColor(C_HEADER);
-        header.setTextSize(13f);
+        header.setTextSize(12f);
         header.setLetterSpacing(0.15f);
         header.setTypeface(Typeface.DEFAULT_BOLD);
         headerRow.addView(header);
 
         rootLayout.addView(headerRow);
-        // Drag ONLY from header
+
+        // ---- SLOT 1: PRIMARY ----
+        LinearLayout slot1 = makeSlot("PRIMARY");
+        TextView[] dOut = new TextView[1];
+        slot1.addView(makeRow("DRONE  ·  61s", "OFF", dOut, v -> toggleDrone()));
+        droneState = dOut[0];
+
+        TextView[] stOut = new TextView[1];
+        slot1.addView(makeRow("START  ·  9min", "OFF", stOut, v -> toggleStart()));
+        startState = stOut[0];
+
+        TextView[] skOut = new TextView[1];
+        slot1.addView(makeRow("SKILL  ·  90s", "OFF", skOut, v -> toggleSkill()));
+        skillState = skOut[0];
+        rootLayout.addView(slot1);
+
+        // ---- SLOT 2: MOVEMENT ----
+        LinearLayout slot2 = makeSlot("MOVEMENT");
+        TextView[] fOut = new TextView[1];
+        slot2.addView(makeRow("FORWARD", "OFF", fOut, v -> toggleFwd()));
+        fwdState = fOut[0];
+
+        TextView[] rOut = new TextView[1];
+        slot2.addView(makeRow("RIGHT", "OFF", rOut, v -> toggleRight()));
+        rightState = rOut[0];
+
+        TextView[] lOut = new TextView[1];
+        slot2.addView(makeRow("LIFT", "OFF", lOut, v -> toggleLift()));
+        liftState = lOut[0];
+
+        TextView[] roOut = new TextView[1];
+        slot2.addView(makeRow("ROTATE  ·  120°", "TAP", roOut, v -> doRotate()));
+        rotateState = roOut[0];
+        rootLayout.addView(slot2);
+
+        // ---- SLOT 3: CUSTOM ----
+        LinearLayout slot3 = makeSlot("CUSTOM BUTTONS");
+        btnContainer = new LinearLayout(this);
+        btnContainer.setOrientation(LinearLayout.VERTICAL);
+        slot3.addView(btnContainer);
+
+        TextView addBtn = new TextView(this);
+        addBtn.setText("+   ADD  BUTTON");
+        addBtn.setTextColor(C_HEADER);
+        addBtn.setTextSize(11f);
+        addBtn.setTypeface(Typeface.DEFAULT_BOLD);
+        addBtn.setGravity(Gravity.CENTER);
+        addBtn.setPadding(20, 18, 20, 18);
+        addBtn.setBackground(bgStroke(C_CYAN_BG, C_BORDER, 22f));
+        addBtn.setElevation(3f);
+        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        addLp.setMargins(0, 6, 0, 0);
+        addBtn.setLayoutParams(addLp);
+        addBtn.setOnClickListener(v -> startCustomPicker());
+        slot3.addView(addBtn);
+        rootLayout.addView(slot3);
+
+        // ---- SLOT 4: API KEY ----
+        LinearLayout slot4 = makeSlot("API KEY");
+        apiStatusText = new TextView(this);
+        apiStatusText.setText("● NOT SET");
+        apiStatusText.setTextColor(C_DIM);
+        apiStatusText.setTextSize(11f);
+        apiStatusText.setTypeface(Typeface.DEFAULT_BOLD);
+        apiStatusText.setPadding(0, 0, 0, 3);
+        slot4.addView(apiStatusText);
+
+        apiExpiryText = new TextView(this);
+        apiExpiryText.setText("Set key to enable features");
+        apiExpiryText.setTextColor(C_DIM);
+        apiExpiryText.setTextSize(10f);
+        apiExpiryText.setPadding(0, 0, 0, 8);
+        slot4.addView(apiExpiryText);
+
+        TextView setApiBtn = new TextView(this);
+        setApiBtn.setText("SET / CHANGE  KEY");
+        setApiBtn.setTextColor(C_HEADER);
+        setApiBtn.setTextSize(11f);
+        setApiBtn.setTypeface(Typeface.DEFAULT_BOLD);
+        setApiBtn.setGravity(Gravity.CENTER);
+        setApiBtn.setPadding(20, 16, 20, 16);
+        setApiBtn.setBackground(bgStroke(C_CYAN_BG, C_BORDER, 22f));
+        setApiBtn.setElevation(3f);
+        LinearLayout.LayoutParams sapLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        sapLp.setMargins(0, 4, 0, 0);
+        setApiBtn.setLayoutParams(sapLp);
+        setApiBtn.setOnClickListener(v -> showApiKeyDialog());
+        slot4.addView(setApiBtn);
+        rootLayout.addView(slot4);
+
+        // ---- SLOT 5: SYSTEM ----
+        LinearLayout slot5 = makeSlot("SYSTEM");
+        TextView[] hOut = new TextView[1];
+        slot5.addView(makeRow("PANEL", "HIDE", hOut, v -> hideOverlay()));
+
+        statsText = new TextView(this);
+        statsText.setText("Taps  0    ·    Idle");
+        statsText.setTextColor(C_DIM);
+        statsText.setTextSize(10f);
+        statsText.setGravity(Gravity.CENTER);
+        statsText.setPadding(0, 8, 0, 8);
+        slot5.addView(statsText);
+
+        LinearLayout closeRow = new LinearLayout(this);
+        closeRow.setOrientation(LinearLayout.HORIZONTAL);
+        closeRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView closeLabel = new TextView(this);
+        closeLabel.setText("STOP SERVICE");
+        closeLabel.setTextColor(C_MUTED);
+        closeLabel.setTextSize(11f);
+        closeLabel.setTypeface(Typeface.DEFAULT_BOLD);
+        closeLabel.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        closeRow.addView(closeLabel);
+        TextView closeBtn = new TextView(this);
+        closeBtn.setText("CLOSE");
+        closeBtn.setTextColor(C_RED);
+        closeBtn.setTextSize(11f);
+        closeBtn.setTypeface(Typeface.DEFAULT_BOLD);
+        closeBtn.setGravity(Gravity.CENTER);
+        closeBtn.setPadding(24, 14, 24, 14);
+        closeBtn.setBackground(bgStroke(C_RED_BG, C_RED, 22f));
+        closeBtn.setMinWidth(115);
+        closeBtn.setElevation(3f);
+        closeBtn.setOnClickListener(v -> stopSelf());
+        closeRow.addView(closeBtn);
+        slot5.addView(closeRow);
+        rootLayout.addView(slot5);
+
+        // ---- Drag ONLY from header ----
         headerRow.setOnTouchListener(new View.OnTouchListener() {
             int startX, startY;
             float touchX, touchY;
@@ -187,8 +343,7 @@ public class OverlayService extends Service {
                         int dy = (int)(e.getRawY() - touchY);
                         if (Math.abs(dx) > 8 || Math.abs(dy) > 8) dragging = true;
                         if (dragging) {
-                            lp.x = startX + dx;
-                            lp.y = startY + dy;
+                            lp.x = startX + dx; lp.y = startY + dy;
                             wm.updateViewLayout(overlay, lp);
                         }
                         return true;
@@ -197,209 +352,6 @@ public class OverlayService extends Service {
             }
         });
 
-
-        // Divider
-        View d1 = new View(this);
-        LinearLayout.LayoutParams dlp1 = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 2);
-        dlp1.setMargins(0, 10, 0, 10);
-        d1.setLayoutParams(dlp1);
-        d1.setBackgroundColor(C_SURFACE);
-        rootLayout.addView(d1);
-
-        // Stats
-        statsText = new TextView(this);
-        statsText.setText("Taps  0    ·    Idle");
-        statsText.setTextColor(C_DIM);
-        statsText.setTextSize(10f);
-        statsText.setGravity(Gravity.CENTER);
-        statsText.setPadding(0, 0, 0, 12);
-        rootLayout.addView(statsText);
-
-        // DRONE
-        TextView[] dOut = new TextView[1];
-        rootLayout.addView(makeRow("DRONE  ·  61s", "OFF", dOut, v -> toggleDrone()));
-        droneState = dOut[0];
-
-        // START
-        TextView[] stOut = new TextView[1];
-        rootLayout.addView(makeRow("START  ·  9min", "OFF", stOut, v -> toggleStart()));
-        startState = stOut[0];
-
-        // SKILL
-        TextView[] skOut = new TextView[1];
-        rootLayout.addView(makeRow("SKILL  ·  90s", "OFF", skOut, v -> toggleSkill()));
-        skillState = skOut[0];
-
-        // Divider
-        View d2 = new View(this);
-        LinearLayout.LayoutParams dlp2 = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 2);
-        dlp2.setMargins(0, 10, 0, 10);
-        d2.setLayoutParams(dlp2);
-        d2.setBackgroundColor(C_SURFACE);
-        rootLayout.addView(d2);
-
-        // Movement header
-        TextView mvHeader = new TextView(this);
-        mvHeader.setText("MOVEMENT");
-        mvHeader.setTextColor(C_HEADER);
-        mvHeader.setTextSize(10f);
-        mvHeader.setLetterSpacing(0.15f);
-        mvHeader.setTypeface(Typeface.DEFAULT_BOLD);
-        mvHeader.setPadding(0, 0, 0, 8);
-        rootLayout.addView(mvHeader);
-
-        // FORWARD
-        TextView[] fOut = new TextView[1];
-        rootLayout.addView(makeRow("FORWARD", "OFF", fOut, v -> toggleFwd()));
-        fwdState = fOut[0];
-
-        // RIGHT
-        TextView[] rOut = new TextView[1];
-        rootLayout.addView(makeRow("RIGHT", "OFF", rOut, v -> toggleRight()));
-        rightState = rOut[0];
-
-        // LIFT
-        TextView[] lOut = new TextView[1];
-        rootLayout.addView(makeRow("LIFT", "OFF", lOut, v -> toggleLift()));
-        liftState = lOut[0];
-
-        // ROTATE 120
-        TextView[] roOut = new TextView[1];
-        rootLayout.addView(makeRow("ROTATE  ·  120°", "OFF", roOut, v -> toggleRotate()));
-        rotateState = roOut[0];
-
-        // Divider
-        View d3 = new View(this);
-        LinearLayout.LayoutParams dlp3 = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 2);
-        dlp3.setMargins(0, 10, 0, 10);
-        d3.setLayoutParams(dlp3);
-        d3.setBackgroundColor(C_SURFACE);
-        rootLayout.addView(d3);
-
-        // Custom header
-        TextView cHeader = new TextView(this);
-        cHeader.setText("CUSTOM BUTTONS");
-        cHeader.setTextColor(C_HEADER);
-        cHeader.setTextSize(10f);
-        cHeader.setLetterSpacing(0.15f);
-        cHeader.setTypeface(Typeface.DEFAULT_BOLD);
-        cHeader.setPadding(0, 0, 0, 8);
-        rootLayout.addView(cHeader);
-
-        btnContainer = new LinearLayout(this);
-        btnContainer.setOrientation(LinearLayout.VERTICAL);
-        rootLayout.addView(btnContainer);
-
-        // ADD button
-        TextView addBtn = new TextView(this);
-        addBtn.setText("+   ADD  BUTTON");
-        addBtn.setTextColor(C_HEADER);
-        addBtn.setTextSize(11f);
-        addBtn.setTypeface(Typeface.DEFAULT_BOLD);
-        addBtn.setGravity(Gravity.CENTER);
-        addBtn.setPadding(20, 20, 20, 20);
-        addBtn.setBackground(bgStroke(C_CYAN_BG, C_BORDER, 24f));
-        addBtn.setElevation(4f);
-        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        addLp.setMargins(0, 6, 0, 6);
-        addBtn.setLayoutParams(addLp);
-        addBtn.setOnClickListener(v -> startCustomPicker());
-        rootLayout.addView(addBtn);
-
-        // Divider
-        View d4 = new View(this);
-        LinearLayout.LayoutParams dlp4 = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 2);
-        dlp4.setMargins(0, 10, 0, 10);
-        d4.setLayoutParams(dlp4);
-        d4.setBackgroundColor(C_SURFACE);
-        rootLayout.addView(d4);
-
-        // API KEY header
-        TextView aHeader = new TextView(this);
-        aHeader.setText("API KEY");
-        aHeader.setTextColor(C_HEADER);
-        aHeader.setTextSize(10f);
-        aHeader.setLetterSpacing(0.15f);
-        aHeader.setTypeface(Typeface.DEFAULT_BOLD);
-        aHeader.setPadding(0, 0, 0, 8);
-        rootLayout.addView(aHeader);
-
-        apiStatusText = new TextView(this);
-        apiStatusText.setText("Not set");
-        apiStatusText.setTextColor(C_DIM);
-        apiStatusText.setTextSize(11f);
-        apiStatusText.setTypeface(Typeface.DEFAULT_BOLD);
-        apiStatusText.setPadding(0, 0, 0, 4);
-        rootLayout.addView(apiStatusText);
-
-        apiExpiryText = new TextView(this);
-        apiExpiryText.setText("Expires: —");
-        apiExpiryText.setTextColor(C_DIM);
-        apiExpiryText.setTextSize(10f);
-        apiExpiryText.setPadding(0, 0, 0, 8);
-        rootLayout.addView(apiExpiryText);
-
-        TextView setApiBtn = new TextView(this);
-        setApiBtn.setText("SET  API  KEY");
-        setApiBtn.setTextColor(C_HEADER);
-        setApiBtn.setTextSize(11f);
-        setApiBtn.setTypeface(Typeface.DEFAULT_BOLD);
-        setApiBtn.setGravity(Gravity.CENTER);
-        setApiBtn.setPadding(20, 18, 20, 18);
-        setApiBtn.setBackground(bgStroke(C_CYAN_BG, C_BORDER, 24f));
-        setApiBtn.setElevation(4f);
-        LinearLayout.LayoutParams sapLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        sapLp.setMargins(0, 4, 0, 4);
-        setApiBtn.setLayoutParams(sapLp);
-        setApiBtn.setOnClickListener(v -> showApiKeyDialog());
-        rootLayout.addView(setApiBtn);
-
-        // Divider
-        View d5 = new View(this);
-        LinearLayout.LayoutParams dlp5 = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 2);
-        dlp5.setMargins(0, 10, 0, 10);
-        d5.setLayoutParams(dlp5);
-        d5.setBackgroundColor(C_SURFACE);
-        rootLayout.addView(d5);
-
-        // HIDE
-        TextView[] hOut = new TextView[1];
-        rootLayout.addView(makeRow("PANEL", "HIDE", hOut, v -> hideOverlay()));
-
-        // CLOSE
-        LinearLayout closeRow = new LinearLayout(this);
-        closeRow.setOrientation(LinearLayout.HORIZONTAL);
-        closeRow.setGravity(Gravity.CENTER_VERTICAL);
-        TextView closeLabel = new TextView(this);
-        closeLabel.setText("STOP");
-        closeLabel.setTextColor(C_MUTED);
-        closeLabel.setTextSize(11f);
-        closeLabel.setTypeface(Typeface.DEFAULT_BOLD);
-        closeLabel.setLayoutParams(new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        closeRow.addView(closeLabel);
-        TextView closeBtn = new TextView(this);
-        closeBtn.setText("CLOSE");
-        closeBtn.setTextColor(C_RED);
-        closeBtn.setTextSize(11f);
-        closeBtn.setTypeface(Typeface.DEFAULT_BOLD);
-        closeBtn.setGravity(Gravity.CENTER);
-        closeBtn.setPadding(24, 16, 24, 16);
-        closeBtn.setBackground(bgStroke(C_RED_BG, C_RED, 24f));
-        closeBtn.setMinWidth(120);
-        closeBtn.setElevation(4f);
-        closeBtn.setOnClickListener(v -> stopSelf());
-        closeRow.addView(closeBtn);
-        rootLayout.addView(closeRow);
         scroll.addView(rootLayout);
 
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
@@ -414,13 +366,13 @@ public class OverlayService extends Service {
                 PixelFormat.TRANSLUCENT
         );
         params.gravity = Gravity.TOP | Gravity.START;
-        params.x = 30; params.y = 200;
+        params.x = 30; params.y = 150;
 
         overlay = scroll;
         wm.addView(overlay, params);
     }
 
-    // ============ API DIALOG ============
+    // ---- API Dialog (with overlay window type) ----
     private void showApiKeyDialog() {
         SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
         String currentKey = p.getString("api_key", "");
@@ -430,21 +382,13 @@ public class OverlayService extends Service {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(40, 40, 40, 40);
 
-        TextView lbl1 = new TextView(this);
-        lbl1.setText("Server URL (apihub)");
-        lbl1.setTextColor(0xFF000000);
-        box.addView(lbl1);
-
+        TextView l1 = new TextView(this); l1.setText("Server URL (apihub)"); l1.setTextColor(0xFF000000); box.addView(l1);
         EditText serverIn = new EditText(this);
         serverIn.setText(currentServer);
         serverIn.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         box.addView(serverIn);
 
-        TextView lbl2 = new TextView(this);
-        lbl2.setText("API Key");
-        lbl2.setTextColor(0xFF000000);
-        box.addView(lbl2);
-
+        TextView l2 = new TextView(this); l2.setText("API Key"); l2.setTextColor(0xFF000000); box.addView(l2);
         EditText keyIn = new EditText(this);
         keyIn.setText(currentKey);
         keyIn.setInputType(InputType.TYPE_CLASS_TEXT);
@@ -458,7 +402,7 @@ public class OverlayService extends Service {
                     String k = keyIn.getText().toString().trim();
                     if (s.isEmpty() || k.isEmpty()) return;
                     p.edit().putString("api_server", s).putString("api_key", k).apply();
-                    apiStatusText.setText("Validating...");
+                    apiStatusText.setText("● VALIDATING...");
                     apiStatusText.setTextColor(C_MUTED);
                     validateApiKey(s, k);
                 })
@@ -477,10 +421,7 @@ public class OverlayService extends Service {
     private void validateApiKey(String server, String key) {
         ApiValidator.validate(server, key, (valid, msg, expiry) -> {
             SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
-            p.edit()
-                    .putBoolean("api_valid", valid)
-                    .putLong("api_expiry", expiry)
-                    .apply();
+            p.edit().putBoolean("api_valid", valid).putLong("api_expiry", expiry).apply();
             updateApiStatus();
         });
     }
@@ -501,9 +442,9 @@ public class OverlayService extends Service {
                     long days = secs / 86400;
                     long hrs = (secs % 86400) / 3600;
                     long mins = (secs % 3600) / 60;
-                    apiExpiryText.setText("Expires: " + days + "d " + hrs + "h " + mins + "m");
+                    apiExpiryText.setText("Expires in " + days + "d " + hrs + "h " + mins + "m");
                 } else {
-                    apiExpiryText.setText("EXPIRED");
+                    apiExpiryText.setText("KEY EXPIRED");
                     apiStatusText.setText("● EXPIRED");
                     apiStatusText.setTextColor(C_RED);
                 }
@@ -511,7 +452,7 @@ public class OverlayService extends Service {
                 apiExpiryText.setText("Expires: never");
             }
         } else {
-            apiStatusText.setText("● INACTIVE");
+            apiStatusText.setText("● NOT SET");
             apiStatusText.setTextColor(C_RED);
             apiExpiryText.setText("Set key to enable features");
         }
@@ -521,16 +462,17 @@ public class OverlayService extends Service {
         apiRefreshHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                updateApiStatus();
                 SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
                 String s = p.getString("api_server", "");
                 String k = p.getString("api_key", "");
                 if (!s.isEmpty() && !k.isEmpty()) {
                     validateApiKey(s, k);
+                } else {
+                    updateApiStatus();
                 }
                 apiRefreshHandler.postDelayed(this, 5 * 60 * 1000L);
             }
-        }, 60000);
+        }, 60 * 1000L);
     }
 
     private boolean isApiValid() {
@@ -541,7 +483,7 @@ public class OverlayService extends Service {
         return true;
     }
 
-    // ============ CUSTOM BUTTONS ============
+    // ---- Custom buttons render ----
     private void refreshCustomButtons() {
         if (btnContainer == null) return;
         btnContainer.removeAllViews();
@@ -563,8 +505,7 @@ public class OverlayService extends Service {
             label.setTextColor(C_MUTED);
             label.setTextSize(11f);
             label.setTypeface(Typeface.DEFAULT_BOLD);
-            label.setLayoutParams(new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            label.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
             row.addView(label);
 
             TextView del = new TextView(this);
@@ -573,26 +514,29 @@ public class OverlayService extends Service {
             del.setTextSize(14f);
             del.setTypeface(Typeface.DEFAULT_BOLD);
             del.setGravity(Gravity.CENTER);
-            del.setPadding(12, 8, 12, 8);
-            del.setBackground(bgStroke(C_RED_BG, C_RED, 20f));
+            del.setPadding(12, 6, 12, 6);
+            del.setBackground(bgStroke(C_RED_BG, C_RED, 18f));
             del.setOnClickListener(v -> {
-                new AlertDialog.Builder(this)
+                AlertDialog dl = new AlertDialog.Builder(this)
                         .setTitle("Delete?")
                         .setMessage("Remove '" + b.name + "'?")
                         .setPositiveButton("Yes", (d, w) -> {
-                            if (s != null) {
-                                s.removeCustomBtn(b);
-                                refreshCustomButtons();
-                            }
+                            if (s != null) { s.removeCustomBtn(b); refreshCustomButtons(); }
                         })
                         .setNegativeButton("No", null)
-                        .show();
+                        .create();
+                if (dl.getWindow() != null) {
+                    dl.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                            ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                            : WindowManager.LayoutParams.TYPE_PHONE);
+                }
+                dl.show();
             });
-            LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT);
-            delLp.setMargins(0, 0, 6, 0);
-            del.setLayoutParams(delLp);
+            dlp.setMargins(0, 0, 6, 0);
+            del.setLayoutParams(dlp);
             row.addView(del);
 
             TextView btn = new TextView(this);
@@ -601,12 +545,12 @@ public class OverlayService extends Service {
             btn.setTextSize(11f);
             btn.setTypeface(Typeface.DEFAULT_BOLD);
             btn.setGravity(Gravity.CENTER);
-            btn.setPadding(24, 16, 24, 16);
+            btn.setPadding(24, 14, 24, 14);
             btn.setBackground(b.running
-                    ? bgGrad(C_GREEN_BG1, C_GREEN_BG2, 24f)
-                    : bgStroke(C_CYAN_BG, C_BORDER, 24f));
-            btn.setMinWidth(120);
-            btn.setElevation(4f);
+                    ? bgGrad(C_GREEN_BG1, C_GREEN_BG2, 22f)
+                    : bgStroke(C_CYAN_BG, C_BORDER, 22f));
+            btn.setMinWidth(115);
+            btn.setElevation(3f);
             btn.setOnClickListener(v -> {
                 if (s == null) return;
                 if (b.running) s.stopCustomBtn(b);
@@ -654,19 +598,14 @@ public class OverlayService extends Service {
             if (e.getAction() == MotionEvent.ACTION_DOWN) {
                 float xp = e.getRawX() / getResources().getDisplayMetrics().widthPixels;
                 float yp = e.getRawY() / getResources().getDisplayMetrics().heightPixels;
-
                 try { wm.removeView(pickerView); } catch (Exception ex) {}
                 pickerView = null;
                 pickerActive = false;
-
-                if ("custom".equals(pendingPickerType)) {
-                    promptCustomName(xp, yp);
-                }
+                if ("custom".equals(pendingPickerType)) promptCustomName(xp, yp);
                 return true;
             }
             return false;
         });
-
         wm.addView(pickerView, pp);
         pickerActive = true;
     }
@@ -675,7 +614,7 @@ public class OverlayService extends Service {
         final EditText input = new EditText(this);
         input.setHint("e.g. Fire, Jump, Zone");
         input.setInputType(InputType.TYPE_CLASS_TEXT);
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("BUTTON  NAME")
                 .setView(input)
                 .setPositiveButton("ADD", (d, w) -> {
@@ -690,7 +629,13 @@ public class OverlayService extends Service {
                 })
                 .setNegativeButton("CANCEL", (d, w) -> showOverlay())
                 .setCancelable(false)
-                .show();
+                .create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        dialog.show();
     }
 
     private void buildHideTab() {
@@ -702,12 +647,10 @@ public class OverlayService extends Service {
         tab.setGravity(Gravity.CENTER);
         tab.setWidth(90);
         tab.setHeight(90);
-
-        GradientDrawable tabBg = bgGrad(C_BORDER, 0xFF007A99, 50f);
-        tabBg.setStroke(3, C_HEADER);
-        tab.setBackground(tabBg);
+        GradientDrawable tb = bgGrad(C_BORDER, 0xFF007A99, 50f);
+        tb.setStroke(3, C_HEADER);
+        tab.setBackground(tb);
         tab.setElevation(20f);
-
         tab.setVisibility(View.GONE);
 
         tab.setOnTouchListener(new View.OnTouchListener() {
@@ -730,8 +673,7 @@ public class OverlayService extends Service {
                         int dy = (int)(e.getRawY() - touchY);
                         if (Math.abs(dx) > 10 || Math.abs(dy) > 10) dragging = true;
                         if (dragging) {
-                            lp.x = startX + dx;
-                            lp.y = startY + dy;
+                            lp.x = startX + dx; lp.y = startY + dy;
                             wm.updateViewLayout(tab, lp);
                         }
                         return true;
@@ -746,15 +688,13 @@ public class OverlayService extends Service {
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_PHONE;
-
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 90, 90, type,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT
         );
         params.gravity = Gravity.TOP | Gravity.START;
-        params.x = 30; params.y = 200;
-
+        params.x = 30; params.y = 150;
         hideTab = tab;
         wm.addView(hideTab, params);
     }
@@ -777,32 +717,21 @@ public class OverlayService extends Service {
         }, 2000);
     }
 
-    private void hideOverlay() {
-        overlay.setVisibility(View.GONE);
-        hideTab.setVisibility(View.VISIBLE);
-    }
+    private void hideOverlay() { overlay.setVisibility(View.GONE); hideTab.setVisibility(View.VISIBLE); }
+    private void showOverlay() { overlay.setVisibility(View.VISIBLE); hideTab.setVisibility(View.GONE); }
 
-    private void showOverlay() {
-        overlay.setVisibility(View.VISIBLE);
-        hideTab.setVisibility(View.GONE);
-    }
-
-    // ============ FRIENDLY API CHECK ============
     private boolean checkApi() {
         if (isApiValid()) return true;
-
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("⚡  API KEY REQUIRED")
-                .setMessage("Pehle apni API key daalo.\n\nWahi key jo tumne Spy Bot website (AXP HUB) se generate ki thi.")
+                .setMessage("Pehle apni API key daalo.\n\nWahi key jo Spy Bot website (AXP HUB) se generate ki thi.")
                 .setPositiveButton("SET  API  KEY", (d, w) -> showApiKeyDialog())
                 .setNegativeButton("CANCEL", null)
                 .create();
-
         if (dialog.getWindow() != null) {
-            dialog.getWindow().setType(
-                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                            ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                            : WindowManager.LayoutParams.TYPE_PHONE);
+            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
         }
         dialog.show();
         return false;
@@ -812,11 +741,11 @@ public class OverlayService extends Service {
         if (on) {
             btn.setText(onText);
             btn.setTextColor(C_GREEN);
-            btn.setBackground(bgGrad(C_GREEN_BG1, C_GREEN_BG2, 24f));
+            btn.setBackground(bgGrad(C_GREEN_BG1, C_GREEN_BG2, 22f));
         } else {
-            btn.setText("OFF");
+            btn.setText(onText.isEmpty() ? "OFF" : onText);
             btn.setTextColor(C_TEXT);
-            btn.setBackground(bgStroke(C_CYAN_BG, C_BORDER, 24f));
+            btn.setBackground(bgStroke(C_CYAN_BG, C_BORDER, 22f));
         }
     }
 
@@ -826,7 +755,7 @@ public class OverlayService extends Service {
         if (s == null) return;
         droneOn = !droneOn;
         if (droneOn) { s.startDrone(); setBtn(droneState, true, "ON · 61s"); }
-        else { s.stopDrone(); setBtn(droneState, false, ""); }
+        else { s.stopDrone(); setBtn(droneState, false, "OFF"); }
     }
 
     private void toggleStart() {
@@ -835,7 +764,7 @@ public class OverlayService extends Service {
         if (s == null) return;
         startOn = !startOn;
         if (startOn) { s.startStartButton(); setBtn(startState, true, "ON · 9min"); }
-        else { s.stopStartButton(); setBtn(startState, false, ""); }
+        else { s.stopStartButton(); setBtn(startState, false, "OFF"); }
     }
 
     private void toggleSkill() {
@@ -844,7 +773,7 @@ public class OverlayService extends Service {
         if (s == null) return;
         skillOn = !skillOn;
         if (skillOn) { s.startSkillButton(); setBtn(skillState, true, "ON · 90s"); }
-        else { s.stopSkillButton(); setBtn(skillState, false, ""); }
+        else { s.stopSkillButton(); setBtn(skillState, false, "OFF"); }
     }
 
     private void toggleFwd() {
@@ -853,7 +782,7 @@ public class OverlayService extends Service {
         if (s == null) return;
         fwdOn = !fwdOn;
         s.setDirection(AutoTapService.DIR_FORWARD, fwdOn);
-        setBtn(fwdState, fwdOn, "ON");
+        setBtn(fwdState, fwdOn, fwdOn ? "ON" : "OFF");
     }
 
     private void toggleRight() {
@@ -862,7 +791,7 @@ public class OverlayService extends Service {
         if (s == null) return;
         rightOn = !rightOn;
         s.setDirection(AutoTapService.DIR_RIGHT, rightOn);
-        setBtn(rightState, rightOn, "ON");
+        setBtn(rightState, rightOn, rightOn ? "ON" : "OFF");
     }
 
     private void toggleLift() {
@@ -871,23 +800,28 @@ public class OverlayService extends Service {
         if (s == null) return;
         liftOn = !liftOn;
         s.setDirection(AutoTapService.DIR_LIFT, liftOn);
-        setBtn(liftState, liftOn, "ON");
+        setBtn(liftState, liftOn, liftOn ? "ON" : "OFF");
     }
 
-    private void toggleRotate() {
+    // ROTATE is now TAP-based (single-shot, auto-off after 120°)
+    private void doRotate() {
         if (!checkApi()) return;
         AutoTapService s = AutoTapService.instance;
         if (s == null) return;
-        rotateOn = !rotateOn;
-        if (rotateOn) { s.startRotate(); setBtn(rotateState, true, "ON · 120°"); }
-        else { s.stopRotate(); setBtn(rotateState, false, ""); }
+        s.startRotate();
+        setBtn(rotateState, true, "ROTATING…");
+        // Auto-reset UI after ~2 sec
+        rotateState.postDelayed(() -> setBtn(rotateState, false, "TAP · 120°"), 2200);
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
         AutoTapService s = AutoTapService.instance;
-        if (s != null) { s.stopDrone(); s.stopStartButton(); s.stopSkillButton(); s.stopRotate(); s.saveConfig(); }
+        if (s != null) {
+            s.stopDrone(); s.stopStartButton(); s.stopSkillButton(); s.stopRotate();
+            s.saveConfig();
+        }
         if (overlay != null) { try { wm.removeView(overlay); } catch (Exception e) {} }
         if (hideTab != null) { try { wm.removeView(hideTab); } catch (Exception e) {} }
         if (pickerView != null) { try { wm.removeView(pickerView); } catch (Exception e) {} }

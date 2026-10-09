@@ -22,7 +22,8 @@ public class ApiValidator {
             String msg = "Unknown error";
             long expiry = 0;
             try {
-                String endpoint = serverUrl.replaceAll("/+$", "") + "/api/validate";
+                // Use /api/check — NOT /api/validate (which tracks IPs)
+                String endpoint = serverUrl.replaceAll("/+$", "") + "/api/check";
                 URL url = new URL(endpoint);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("POST");

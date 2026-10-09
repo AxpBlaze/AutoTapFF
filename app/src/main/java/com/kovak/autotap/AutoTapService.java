@@ -282,6 +282,7 @@ public class AutoTapService extends AccessibilityService {
         float y = h * 0.45f;
         float cx = w * 0.85f;
 
+        // 3 swipes = ~120°
         for (int i = 0; i < 3; i++) {
             if (!rotateRunning) return;
             if (rotateDirection == 1) {
@@ -293,7 +294,8 @@ public class AutoTapService extends AccessibilityService {
         }
 
         rotateDirection = -rotateDirection;
-        rotateHandler.postDelayed(this::rotateLoop, 1500);
+        // Single-shot: auto stop after one cycle
+        rotateRunning = false;
     }
 
     // ============ MOVE ============
