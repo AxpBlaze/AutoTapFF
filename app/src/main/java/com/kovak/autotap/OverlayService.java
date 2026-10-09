@@ -3,20 +3,26 @@ package com.kovak.autotap;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
 import android.graphics.PixelFormat;
-import android.hardware.camera2.CameraManager;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.IBinder;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 public class OverlayService extends Service {
+
     private WindowManager wm;
     private View overlay;
-    private boolean torch = false;
+    private LinearLayout rootLayout;
+    private TextView afkBtn, moveBtn, closeBtn;
+    private boolean afkOn = false;
+    private boolean moveOn = false;
 
     @Override public IBinder onBind(Intent i) { return null; }
 
@@ -24,80 +30,164 @@ public class OverlayService extends Service {
     public void onCreate() {
         super.onCreate();
         wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
-        createOverlay();
+        buildOverlay();
     }
 
-    private void createOverlay() {
-        LinearLayout ll = new LinearLayout(this);
-        ll.setOrientation(LinearLayout.VERTICAL);
-        ll.setBackgroundColor(0xCC000000);
-        ll.setPadding(30, 30, 30, 30);
+    private GradientDrawable bg(int color, float radius) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(color);
+        g.setCornerRadius(radius);
+        return g;
+    }
 
-        Button afk = new Button(this);
-        afk.setText("AFK:OFF");
-        afk.setOnClickListener(v -> {
-            AutoTapService s = AutoTapService.instance;
-            if (s == null) return;
-            Button b = (Button) v;
-            if (b.getText().toString().equals("AFK:OFF")) {
-                s.startAfk(); b.setText("AFK:ON");
-            } else {
-                s.stopAfk(); b.setText("AFK:OFF");
+    private TextView makeBtn(String text, int textColor, int bgColor) {
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setTextColor(textColor);
+        tv.setTextSize(12f);
+        tv.setPadding(40, 25, 40, 25);
+        tv.setGravity(Gravity.CENTER);
+        tv.setBackground(bg(bgColor, 30f));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 8, 0, 8);
+        tv.setLayoutParams(lp);
+        return tv;
+    }
+
+    private void buildOverlay() {
+        rootLayout = new LinearLayout(this);
+        rootLayout.setOrientation(LinearLayout.VERTICAL);
+        rootLayout.setPadding(30, 30, 30, 30);
+
+        // glass-like dark background
+        GradientDrawable containerBg = new GradientDrawable();
+        containerBg.setColor(0xEE0F0F1A);
+        containerBg.setCornerRadius(45f);
+        containerBg.setStroke(3, 0xFF6366F1);
+        rootLayout.setBackground(containerBg);
+        rootLayout.setElevation(20f);
+
+        // Header text
+        TextView header = new TextView(this);
+        header.setText("AXP");
+        header.setTextColor(0xFF818CF8);
+        header.setTextSize(14f);
+        header.setGravity(Gravity.CENTER);
+        header.setLetterSpacing(0.3f);
+        header.setPadding(0, 10, 0, 20);
+        rootLayout.addView(header);
+
+        // AFK button
+        afkBtn = makeBtn("AFK  OFF", 0xFFFFFFFF, 0xFF1E1E35);
+        afkBtn.setOnClickListener(v -> toggleAfk());
+        rootLayout.addView(afkBtn);
+
+        // MOVE button
+        moveBtn = makeBtn("MOVE  OFF", 0xFFFFFFFF, 0xFF1E1E35);
+        moveBtn.setOnClickListener(v -> toggleMove());
+        rootLayout.addView(moveBtn);
+
+        // Close button
+        closeBtn = makeBtn("CLOSE", 0xFFEF4444, 0xFF1E1E35);
+        closeBtn.setOnClickListener(v -> stopSelf());
+        rootLayout.addView(closeBtn);
+
+        // Draggable — long press to move
+        rootLayout.setOnTouchListener(new View.OnTouchListener() {
+            int startX, startY;
+            float touchX, touchY;
+            boolean dragging = false;
+            WindowManager.LayoutParams lp;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent e) {
+                lp = (WindowManager.LayoutParams) rootLayout.getLayoutParams();
+                switch (e.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startX = lp.x;
+                        startY = lp.y;
+                        touchX = e.getRawX();
+                        touchY = e.getRawY();
+                        dragging = false;
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        int dx = (int)(e.getRawX() - touchX);
+                        int dy = (int)(e.getRawY() - touchY);
+                        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) dragging = true;
+                        if (dragging) {
+                            lp.x = startX + dx;
+                            lp.y = startY + dy;
+                            wm.updateViewLayout(rootLayout, lp);
+                        }
+                        return true;
+                }
+                return false;
             }
         });
-        ll.addView(afk);
-
-        Button tr = new Button(this);
-        tr.setText("TORCH");
-        tr.setOnClickListener(v -> toggleTorch());
-        ll.addView(tr);
-
-        Button mv = new Button(this);
-        mv.setText("MOVE");
-        mv.setOnClickListener(v -> {
-            AutoTapService s = AutoTapService.instance;
-            if (s == null) return;
-            int w = getResources().getDisplayMetrics().widthPixels;
-            int h = getResources().getDisplayMetrics().heightPixels;
-            s.swipe(w * 0.3f, h * 0.7f, w * 0.7f, h * 0.7f, 400);
-        });
-        ll.addView(mv);
-
-        Button ex = new Button(this);
-        ex.setText("EXIT");
-        ex.setOnClickListener(v -> stopSelf());
-        ll.addView(ex);
 
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-            ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            : WindowManager.LayoutParams.TYPE_PHONE;
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : WindowManager.LayoutParams.TYPE_PHONE;
 
-        WindowManager.LayoutParams p = new WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            type,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT
         );
-        p.gravity = Gravity.TOP | Gravity.START;
-        p.x = 30; p.y = 200;
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.x = 30;
+        params.y = 200;
 
-        overlay = ll;
-        wm.addView(overlay, p);
+        overlay = rootLayout;
+        wm.addView(overlay, params);
     }
 
-    private void toggleTorch() {
-        try {
-            CameraManager cm = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-            String id = cm.getCameraIdList()[0];
-            torch = !torch;
-            cm.setTorchMode(id, torch);
-        } catch (Exception e) {}
+    private void toggleAfk() {
+        AutoTapService s = AutoTapService.instance;
+        if (s == null) {
+            afkBtn.setText("NO SERVICE");
+            return;
+        }
+        afkOn = !afkOn;
+        if (afkOn) {
+            s.startAfk();
+            afkBtn.setText("AFK  ON");
+            afkBtn.setTextColor(0xFF4ADE80);
+            afkBtn.setBackground(bg(0xFF0F2A1F, 30f));
+        } else {
+            s.stopAfk();
+            afkBtn.setText("AFK  OFF");
+            afkBtn.setTextColor(0xFFFFFFFF);
+            afkBtn.setBackground(bg(0xFF1E1E35, 30f));
+        }
+    }
+
+    private void toggleMove() {
+        AutoTapService s = AutoTapService.instance;
+        if (s == null) return;
+        moveOn = !moveOn;
+        if (moveOn) {
+            s.startMove();
+            moveBtn.setText("MOVE  ON");
+            moveBtn.setTextColor(0xFF4ADE80);
+            moveBtn.setBackground(bg(0xFF0F2A1F, 30f));
+        } else {
+            s.stopMove();
+            moveBtn.setText("MOVE  OFF");
+            moveBtn.setTextColor(0xFFFFFFFF);
+            moveBtn.setBackground(bg(0xFF1E1E35, 30f));
+        }
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
+        AutoTapService s = AutoTapService.instance;
+        if (s != null) { s.stopAfk(); s.stopMove(); }
         if (overlay != null) {
             try { wm.removeView(overlay); } catch (Exception e) {}
         }
