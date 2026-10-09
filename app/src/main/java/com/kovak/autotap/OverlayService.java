@@ -166,6 +166,37 @@ public class OverlayService extends Service {
         headerRow.addView(header);
 
         rootLayout.addView(headerRow);
+        // Drag ONLY from header
+        headerRow.setOnTouchListener(new View.OnTouchListener() {
+            int startX, startY;
+            float touchX, touchY;
+            boolean dragging = false;
+            WindowManager.LayoutParams lp;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent e) {
+                lp = (WindowManager.LayoutParams) overlay.getLayoutParams();
+                switch (e.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startX = lp.x; startY = lp.y;
+                        touchX = e.getRawX(); touchY = e.getRawY();
+                        dragging = false;
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        int dx = (int)(e.getRawX() - touchX);
+                        int dy = (int)(e.getRawY() - touchY);
+                        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) dragging = true;
+                        if (dragging) {
+                            lp.x = startX + dx;
+                            lp.y = startY + dy;
+                            wm.updateViewLayout(overlay, lp);
+                        }
+                        return true;
+                }
+                return false;
+            }
+        });
+
 
         // Divider
         View d1 = new View(this);
@@ -369,37 +400,6 @@ public class OverlayService extends Service {
         closeBtn.setOnClickListener(v -> stopSelf());
         closeRow.addView(closeBtn);
         rootLayout.addView(closeRow);
-
-        // Draggable
-        rootLayout.setOnTouchListener(new View.OnTouchListener() {
-            int startX, startY;
-            float touchX, touchY;
-            boolean dragging = false;
-            WindowManager.LayoutParams lp;
-
-            @Override
-            public boolean onTouch(View v, MotionEvent e) {
-                lp = (WindowManager.LayoutParams) overlay.getLayoutParams();
-                switch (e.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        startX = lp.x; startY = lp.y;
-                        touchX = e.getRawX(); touchY = e.getRawY();
-                        dragging = false;
-                        return true;
-                    case MotionEvent.ACTION_MOVE:
-                        int dx = (int)(e.getRawX() - touchX);
-                        int dy = (int)(e.getRawY() - touchY);
-                        if (Math.abs(dx) > 12 || Math.abs(dy) > 12) dragging = true;
-                        if (dragging) {
-                            lp.x = startX + dx; lp.y = startY + dy;
-                            wm.updateViewLayout(overlay, lp);
-                        }
-                        return true;
-                }
-                return false;
-            }
-        });
-
         scroll.addView(rootLayout);
 
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
@@ -450,7 +450,7 @@ public class OverlayService extends Service {
         keyIn.setInputType(InputType.TYPE_CLASS_TEXT);
         box.addView(keyIn);
 
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("API KEY  ·  SETUP")
                 .setView(box)
                 .setPositiveButton("SAVE & VALIDATE", (d, w) -> {
@@ -463,7 +463,15 @@ public class OverlayService extends Service {
                     validateApiKey(s, k);
                 })
                 .setNegativeButton("CANCEL", null)
-                .show();
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setType(
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                            ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                            : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        dialog.show();
     }
 
     private void validateApiKey(String server, String key) {
@@ -783,12 +791,20 @@ public class OverlayService extends Service {
     private boolean checkApi() {
         if (isApiValid()) return true;
 
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("⚡  API KEY REQUIRED")
                 .setMessage("Pehle apni API key daalo.\n\nWahi key jo tumne Spy Bot website (AXP HUB) se generate ki thi.")
                 .setPositiveButton("SET  API  KEY", (d, w) -> showApiKeyDialog())
                 .setNegativeButton("CANCEL", null)
-                .show();
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setType(
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                            ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                            : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        dialog.show();
         return false;
     }
 
