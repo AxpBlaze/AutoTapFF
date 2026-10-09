@@ -19,7 +19,6 @@ public class AutoTapService extends AccessibilityService {
     private Handler moveHandler = new Handler(Looper.getMainLooper());
     private boolean afkRunning = false;
     private boolean moveRunning = false;
-    private int moveDirection = 1;
     private final Random random = new Random();
 
     // Custom config
@@ -29,7 +28,6 @@ public class AutoTapService extends AccessibilityService {
     public boolean randomize = true;
     public int randomJitterPx = 40;
     public boolean vibrateOnTap = true;
-    public boolean appWhitelistOnly = false;
 
     public int tapCount = 0;
     public long startTime = 0;
@@ -59,7 +57,6 @@ public class AutoTapService extends AccessibilityService {
         tapYPercent = p.getFloat("tap_y", 0.62f);
         randomize = p.getBoolean("randomize", true);
         vibrateOnTap = p.getBoolean("vibrate", true);
-        appWhitelistOnly = p.getBoolean("whitelist", false);
     }
 
     public void saveConfig() {
@@ -70,7 +67,6 @@ public class AutoTapService extends AccessibilityService {
                 .putFloat("tap_y", tapYPercent)
                 .putBoolean("randomize", randomize)
                 .putBoolean("vibrate", vibrateOnTap)
-                .putBoolean("whitelist", appWhitelistOnly)
                 .apply();
     }
 
@@ -100,7 +96,21 @@ public class AutoTapService extends AccessibilityService {
         vibrate(60);
     }
 
-    // ============ AFK ============
+    // ============ CHARACTER TAP ============
+    // Character ke upar single click
+    public void characterTap() {
+        int w = getResources().getDisplayMetrics().widthPixels;
+        int h = getResources().getDisplayMetrics().heightPixels;
+        float x = w * tapXPercent;
+        float y = h * tapYPercent;
+        if (randomize) {
+            x += random.nextInt(randomJitterPx * 2) - randomJitterPx;
+            y += random.nextInt(randomJitterPx * 2) - randomJitterPx;
+        }
+        tap(x, y);
+    }
+
+    // ============ AFK LOOP ============
     public void startAfk() {
         if (afkRunning) return;
         afkRunning = true;
@@ -114,34 +124,19 @@ public class AutoTapService extends AccessibilityService {
     }
 
     public boolean isAfkRunning() { return afkRunning; }
-    public boolean isMoveRunning() { return moveRunning; }
 
     private void afkLoop() {
         if (!afkRunning) return;
-
-        int w = getResources().getDisplayMetrics().widthPixels;
-        int h = getResources().getDisplayMetrics().heightPixels;
-
-        float x = w * tapXPercent;
-        float y = h * tapYPercent;
-
-        if (randomize) {
-            x += random.nextInt(randomJitterPx * 2) - randomJitterPx;
-            y += random.nextInt(randomJitterPx * 2) - randomJitterPx;
-        }
-
-        tap(x, y);
+        characterTap();
 
         long delay = afkIntervalMs;
-        if (randomize) {
-            delay += random.nextInt(10000) - 5000; // ±5 sec
-        }
+        if (randomize) delay += random.nextInt(10000) - 5000;
         if (delay < 5000) delay = 5000;
-
         afkHandler.postDelayed(this::afkLoop, delay);
     }
 
-    // ============ MOVE ============
+    // ============ MOVE — FORWARD ONLY ============
+    // Aage ki taraf hi badhega — screen nahi ghumayega
     public void startMove() {
         if (moveRunning) return;
         moveRunning = true;
@@ -153,28 +148,31 @@ public class AutoTapService extends AccessibilityService {
         moveHandler.removeCallbacksAndMessages(null);
     }
 
+    public boolean isMoveRunning() { return moveRunning; }
+
     private void moveLoop() {
         if (!moveRunning) return;
+
         int w = getResources().getDisplayMetrics().widthPixels;
         int h = getResources().getDisplayMetrics().heightPixels;
-        float centerY = h * 0.6f;
-        float startX, endX;
 
-        if (moveDirection == 1) {
-            startX = w * 0.25f; endX = w * 0.75f; moveDirection = -1;
-        } else {
-            startX = w * 0.75f; endX = w * 0.25f; moveDirection = 1;
-        }
+        // Forward movement: bottom-center → top-center (aage badhna)
+        // Screen nahi ghumayega — sirf character aage chalega
+        float startX = w * 0.5f;
+        float startY = h * 0.70f;   // joystick zone
+        float endX   = w * 0.5f;
+        float endY   = h * 0.45f;   // up ki taraf swipe
 
-        long dur = 500 + random.nextInt(400);
-        swipe(startX, centerY, endX, centerY, dur);
-        moveHandler.postDelayed(this::moveLoop, 800 + random.nextInt(500));
+        long dur = 800 + random.nextInt(400);
+        swipe(startX, startY, endX, endY, dur);
+
+        // Next swipe after short gap
+        long delay = 1000 + random.nextInt(600);
+        moveHandler.postDelayed(this::moveLoop, delay);
     }
 
     // ============ TEST TAP ============
     public void testTap() {
-        int w = getResources().getDisplayMetrics().widthPixels;
-        int h = getResources().getDisplayMetrics().heightPixels;
-        tap(w * tapXPercent, h * tapYPercent);
+        characterTap();
     }
 }

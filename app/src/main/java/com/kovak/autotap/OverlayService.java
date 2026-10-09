@@ -4,6 +4,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.PixelFormat;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Handler;
@@ -13,7 +14,6 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -23,7 +23,8 @@ public class OverlayService extends Service {
     private View overlay;
     private View hideTab;
     private LinearLayout rootLayout;
-    private TextView afkBtn, moveBtn, hideBtn, closeBtn, statsText;
+    private TextView afkState, moveState, charState;
+    private TextView statsText;
     private boolean afkOn = false;
     private boolean moveOn = false;
 
@@ -40,13 +41,6 @@ public class OverlayService extends Service {
         startStatsUpdater();
     }
 
-    private GradientDrawable bg(int color, float radius) {
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(color);
-        g.setCornerRadius(radius);
-        return g;
-    }
-
     private GradientDrawable bgGrad(int c1, int c2, float radius) {
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
                 new int[]{c1, c2});
@@ -54,90 +48,141 @@ public class OverlayService extends Service {
         return g;
     }
 
-    private TextView makeBtn(String text, int textColor, int bgColor) {
-        TextView tv = new TextView(this);
-        tv.setText(text);
-        tv.setTextColor(textColor);
-        tv.setTextSize(13f);
-        tv.setPadding(40, 28, 40, 28);
-        tv.setGravity(Gravity.CENTER);
-        tv.setBackground(bg(bgColor, 32f));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+    private GradientDrawable bgSolid(int color, float radius) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(color);
+        g.setCornerRadius(radius);
+        return g;
+    }
+
+    /** Row: label on left, button on right */
+    private LinearLayout makeRow(String labelText, String btnText, int btnColor,
+                                  View.OnClickListener listener, TextView[] stateOut) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, 7, 0, 7);
-        tv.setLayoutParams(lp);
-        tv.setElevation(6f);
-        return tv;
+        rlp.setMargins(0, 6, 0, 6);
+        row.setLayoutParams(rlp);
+
+        // Label
+        TextView label = new TextView(this);
+        label.setText(labelText);
+        label.setTextColor(0xFF9CA3AF);
+        label.setTextSize(11f);
+        label.setLetterSpacing(0.15f);
+        label.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        label.setLayoutParams(llp);
+        row.addView(label);
+
+        // Button
+        TextView btn = new TextView(this);
+        btn.setText(btnText);
+        btn.setTextColor(0xFFFFFFFF);
+        btn.setTextSize(12f);
+        btn.setTypeface(Typeface.DEFAULT_BOLD);
+        btn.setGravity(Gravity.CENTER);
+        btn.setPadding(30, 22, 30, 22);
+        btn.setBackground(bgSolid(btnColor, 30f));
+        btn.setElevation(4f);
+        btn.setMinWidth(140);
+        btn.setOnClickListener(listener);
+        row.addView(btn);
+
+        stateOut[0] = btn;
+        return row;
     }
 
     private void buildOverlay() {
         rootLayout = new LinearLayout(this);
         rootLayout.setOrientation(LinearLayout.VERTICAL);
-        rootLayout.setPadding(32, 32, 32, 32);
+        rootLayout.setPadding(35, 35, 35, 35);
 
-        GradientDrawable containerBg = bgGrad(0xF010101F, 0xF00A0A14, 50f);
+        GradientDrawable containerBg = bgGrad(0xF010101F, 0xF00A0A14, 45f);
         containerBg.setStroke(3, 0xFF6366F1);
         rootLayout.setBackground(containerBg);
         rootLayout.setElevation(25f);
 
-        // Header
+        // Header row
         LinearLayout headerRow = new LinearLayout(this);
         headerRow.setOrientation(LinearLayout.HORIZONTAL);
-        headerRow.setGravity(Gravity.CENTER);
+        headerRow.setGravity(Gravity.CENTER_VERTICAL);
 
         TextView dot = new TextView(this);
         dot.setText("●");
         dot.setTextColor(0xFF4ADE80);
-        dot.setTextSize(10f);
+        dot.setTextSize(12f);
         headerRow.addView(dot);
 
         TextView header = new TextView(this);
-        header.setText(" AXP CONTROL ");
+        header.setText("  AXP  ·  AUTO");
         header.setTextColor(0xFF818CF8);
         header.setTextSize(13f);
-        header.setLetterSpacing(0.15f);
+        header.setLetterSpacing(0.2f);
+        header.setTypeface(Typeface.DEFAULT_BOLD);
         headerRow.addView(header);
 
         rootLayout.addView(headerRow);
 
+        // Divider
+        View divider = new View(this);
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 2);
+        dlp.setMargins(0, 12, 0, 12);
+        divider.setLayoutParams(dlp);
+        divider.setBackgroundColor(0xFF1E1E35);
+        rootLayout.addView(divider);
+
         // Stats
         statsText = new TextView(this);
-        statsText.setText("Taps: 0  ·  Time: 00:00");
+        statsText.setText("Taps  0    ·    Idle");
         statsText.setTextColor(0xFF6B6B80);
         statsText.setTextSize(10f);
+        statsText.setLetterSpacing(0.1f);
         statsText.setGravity(Gravity.CENTER);
-        statsText.setPadding(0, 4, 0, 16);
+        statsText.setPadding(0, 0, 0, 14);
         rootLayout.addView(statsText);
 
-        // AFK button
-        afkBtn = makeBtn("AFK  OFF", 0xFFFFFFFF, 0xFF1E1E35);
-        afkBtn.setOnClickListener(v -> toggleAfk());
-        rootLayout.addView(afkBtn);
+        // AFK row
+        TextView[] afkOut = new TextView[1];
+        LinearLayout afkRow = makeRow("AFK  TAP", "OFF", 0xFF1E1E35,
+                v -> toggleAfk(), afkOut);
+        afkState = afkOut[0];
+        rootLayout.addView(afkRow);
 
-        // MOVE button
-        moveBtn = makeBtn("MOVE  OFF", 0xFFFFFFFF, 0xFF1E1E35);
-        moveBtn.setOnClickListener(v -> toggleMove());
-        rootLayout.addView(moveBtn);
+        // CHARACTER row
+        TextView[] charOut = new TextView[1];
+        LinearLayout charRow = makeRow("CHARACTER", "TAP", 0xFF1E1E35,
+                v -> characterTap(), charOut);
+        charState = charOut[0];
+        rootLayout.addView(charRow);
 
-        // TEST TAP
-        TextView testBtn = makeBtn("TEST TAP", 0xFF818CF8, 0xFF1E1E35);
-        testBtn.setOnClickListener(v -> {
-            AutoTapService s = AutoTapService.instance;
-            if (s != null) s.testTap();
-        });
-        rootLayout.addView(testBtn);
+        // MOVE row
+        TextView[] moveOut = new TextView[1];
+        LinearLayout moveRow = makeRow("MOVE", "OFF", 0xFF1E1E35,
+                v -> toggleMove(), moveOut);
+        moveState = moveOut[0];
+        rootLayout.addView(moveRow);
 
-        // HIDE
-        hideBtn = makeBtn("HIDE", 0xFFFFD200, 0xFF1E1E35);
-        hideBtn.setOnClickListener(v -> hideOverlay());
-        rootLayout.addView(hideBtn);
+        // HIDE row
+        TextView[] hideOut = new TextView[1];
+        LinearLayout hideRow = makeRow("PANEL", "HIDE", 0xFF1E1E35,
+                v -> hideOverlay(), hideOut);
+        rootLayout.addView(hideRow);
 
-        // CLOSE
-        closeBtn = makeBtn("CLOSE", 0xFFEF4444, 0xFF1E1E35);
-        closeBtn.setOnClickListener(v -> stopSelf());
-        rootLayout.addView(closeBtn);
+        // CLOSE row
+        TextView[] closeOut = new TextView[1];
+        LinearLayout closeRow = makeRow("STOP", "CLOSE", 0xFF2A1414,
+                v -> stopSelf(), closeOut);
+        closeRow.getChildAt(1).setBackground(bgSolid(0xFF2A1414, 30f));
+        ((TextView) closeRow.getChildAt(1)).setTextColor(0xFFEF4444);
+        rootLayout.addView(closeRow);
 
+        // Draggable
         rootLayout.setOnTouchListener(new View.OnTouchListener() {
             int startX, startY;
             float touchX, touchY;
@@ -156,7 +201,7 @@ public class OverlayService extends Service {
                     case MotionEvent.ACTION_MOVE:
                         int dx = (int)(e.getRawX() - touchX);
                         int dy = (int)(e.getRawY() - touchY);
-                        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) dragging = true;
+                        if (Math.abs(dx) > 12 || Math.abs(dy) > 12) dragging = true;
                         if (dragging) {
                             lp.x = startX + dx; lp.y = startY + dy;
                             wm.updateViewLayout(rootLayout, lp);
@@ -189,7 +234,8 @@ public class OverlayService extends Service {
         TextView tab = new TextView(this);
         tab.setText("A");
         tab.setTextColor(0xFFFFFFFF);
-        tab.setTextSize(16f);
+        tab.setTextSize(18f);
+        tab.setTypeface(Typeface.DEFAULT_BOLD);
         tab.setGravity(Gravity.CENTER);
         tab.setWidth(90);
         tab.setHeight(90);
@@ -250,10 +296,11 @@ public class OverlayService extends Service {
                     long elapsed = (System.currentTimeMillis() - s.startTime) / 1000;
                     long mins = elapsed / 60;
                     long secs = elapsed % 60;
-                    statsText.setText(String.format("Taps: %d  ·  Time: %02d:%02d",
+                    statsText.setText(String.format("Taps  %d    ·    %02d:%02d",
                             s.tapCount, mins, secs));
                 } else {
-                    statsText.setText("Taps: " + (s != null ? s.tapCount : 0) + "  ·  Idle");
+                    int t = (s != null ? s.tapCount : 0);
+                    statsText.setText("Taps  " + t + "    ·    Idle");
                 }
                 statsHandler.postDelayed(this, 2000);
             }
@@ -270,20 +317,25 @@ public class OverlayService extends Service {
         hideTab.setVisibility(View.GONE);
     }
 
+    private void characterTap() {
+        AutoTapService s = AutoTapService.instance;
+        if (s != null) s.characterTap();
+    }
+
     private void toggleAfk() {
         AutoTapService s = AutoTapService.instance;
         if (s == null) return;
         afkOn = !afkOn;
         if (afkOn) {
             s.startAfk();
-            afkBtn.setText("AFK  ON  ·  61s");
-            afkBtn.setTextColor(0xFF4ADE80);
-            afkBtn.setBackground(bgGrad(0xFF0F2A1F, 0xFF0A1A12, 32f));
+            afkState.setText("ON  ·  61s");
+            afkState.setTextColor(0xFF4ADE80);
+            afkState.setBackground(bgGrad(0xFF0F2A1F, 0xFF0A1A12, 30f));
         } else {
             s.stopAfk();
-            afkBtn.setText("AFK  OFF");
-            afkBtn.setTextColor(0xFFFFFFFF);
-            afkBtn.setBackground(bg(0xFF1E1E35, 32f));
+            afkState.setText("OFF");
+            afkState.setTextColor(0xFFFFFFFF);
+            afkState.setBackground(bgSolid(0xFF1E1E35, 30f));
         }
     }
 
@@ -293,14 +345,14 @@ public class OverlayService extends Service {
         moveOn = !moveOn;
         if (moveOn) {
             s.startMove();
-            moveBtn.setText("MOVE  ON");
-            moveBtn.setTextColor(0xFF4ADE80);
-            moveBtn.setBackground(bgGrad(0xFF0F2A1F, 0xFF0A1A12, 32f));
+            moveState.setText("ON  ·  FWD");
+            moveState.setTextColor(0xFF4ADE80);
+            moveState.setBackground(bgGrad(0xFF0F2A1F, 0xFF0A1A12, 30f));
         } else {
             s.stopMove();
-            moveBtn.setText("MOVE  OFF");
-            moveBtn.setTextColor(0xFFFFFFFF);
-            moveBtn.setBackground(bg(0xFF1E1E35, 32f));
+            moveState.setText("OFF");
+            moveState.setTextColor(0xFFFFFFFF);
+            moveState.setBackground(bgSolid(0xFF1E1E35, 30f));
         }
     }
 
