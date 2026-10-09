@@ -8,6 +8,10 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Vibrator;
 import android.view.accessibility.AccessibilityEvent;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class AutoTapService extends AccessibilityService {
@@ -21,22 +25,44 @@ public class AutoTapService extends AccessibilityService {
     private boolean moveRunning = false;
     private final Random random = new Random();
 
-    // Drone coordinates (percent of screen)
-    // Photo ke hisaab se drone icon roughly right-bottom area mein hai
-    public float droneXPercent = 0.79f;   // right side
-    public float droneYPercent = 0.83f;   // bottom-right drone area
-
+    public float droneXPercent = 0.79f;
+    public float droneYPercent = 0.83f;
     public int droneIntervalMs = 61000;
     public boolean randomize = true;
     public boolean vibrateOnTap = true;
-
     public int tapCount = 0;
     public long startTime = 0;
 
-    // Movement direction
+    // Active move directions (can be multiple)
+    public boolean fwdActive = false;
+    public boolean rightActive = false;
+    public boolean liftActive = false;
+
     public static final int DIR_FORWARD = 1;
     public static final int DIR_RIGHT = 2;
     public static final int DIR_LIFT = 3;
+
+    // Custom buttons
+    public static class CustomBtn {
+        public String name;
+        public float xPercent;
+        public float yPercent;
+        public long intervalMs; // 0 = manual only
+        public boolean loop;
+        public boolean running;
+        public Handler handler;
+
+        public CustomBtn(String name, float x, float y, long interval, boolean loop) {
+            this.name = name;
+            this.xPercent = x;
+            this.yPercent = y;
+            this.intervalMs = interval;
+            this.loop = loop;
+            this.running = false;
+        }
+    }
+
+    public List<CustomBtn> customBtns = new ArrayList<>();
 
     @Override
     public void onServiceConnected() {
@@ -63,17 +89,49 @@ public class AutoTapService extends AccessibilityService {
         droneIntervalMs = p.getInt("drone_interval", 61000);
         randomize = p.getBoolean("randomize", true);
         vibrateOnTap = p.getBoolean("vibrate", true);
+
+        // Load custom buttons
+        customBtns.clear();
+        String json = p.getString("custom_btns", "[]");
+        try {
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                CustomBtn b = new CustomBtn(
+                        o.getString("name"),
+                        (float) o.getDouble("x"),
+                        (float) o.getDouble("y"),
+                        o.getLong("interval"),
+                        o.getBoolean("loop")
+                );
+                b.handler = new Handler(Looper.getMainLooper());
+                customBtns.add(b);
+            }
+        } catch (Exception e) {}
     }
 
     public void saveConfig() {
         SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
-        p.edit()
-                .putFloat("drone_x", droneXPercent)
-                .putFloat("drone_y", droneYPercent)
-                .putInt("drone_interval", droneIntervalMs)
-                .putBoolean("randomize", randomize)
-                .putBoolean("vibrate", vibrateOnTap)
-                .apply();
+        try {
+            JSONArray arr = new JSONArray();
+            for (CustomBtn b : customBtns) {
+                JSONObject o = new JSONObject();
+                o.put("name", b.name);
+                o.put("x", b.xPercent);
+                o.put("y", b.yPercent);
+                o.put("interval", b.intervalMs);
+                o.put("loop", b.loop);
+                arr.put(o);
+            }
+            p.edit()
+                    .putFloat("drone_x", droneXPercent)
+                    .putFloat("drone_y", droneYPercent)
+                    .putInt("drone_interval", droneIntervalMs)
+                    .putBoolean("randomize", randomize)
+                    .putBoolean("vibrate", vibrateOnTap)
+                    .putString("custom_btns", arr.toString())
+                    .apply();
+        } catch (Exception e) {}
     }
 
     private void vibrate(long ms) {
@@ -84,7 +142,6 @@ public class AutoTapService extends AccessibilityService {
         } catch (Exception e) {}
     }
 
-    // ============ TAP ============
     public void tap(float x, float y) {
         Path p = new Path(); p.moveTo(x, y);
         GestureDescription.Builder b = new GestureDescription.Builder();
@@ -102,7 +159,7 @@ public class AutoTapService extends AccessibilityService {
         vibrate(60);
     }
 
-    // ============ DRONE TAP ============
+    // ============ DRONE ============
     public void droneTap() {
         int w = getResources().getDisplayMetrics().widthPixels;
         int h = getResources().getDisplayMetrics().heightPixels;
@@ -115,11 +172,12 @@ public class AutoTapService extends AccessibilityService {
         tap(x, y);
     }
 
-    // ============ DRONE LOOP — 61s ============
     public void startDrone() {
         if (droneRunning) return;
         droneRunning = true;
         startTime = System.currentTimeMillis();
+        // Immediate first tap
+        droneTap();
         droneLoop();
     }
 
@@ -132,74 +190,102 @@ public class AutoTapService extends AccessibilityService {
 
     private void droneLoop() {
         if (!droneRunning) return;
-        droneTap();
-
         long delay = droneIntervalMs;
         if (randomize) delay += random.nextInt(8000) - 4000;
         if (delay < 5000) delay = 5000;
-        droneHandler.postDelayed(this::droneLoop, delay);
+        droneHandler.postDelayed(() -> {
+            if (!droneRunning) return;
+            droneTap();
+            droneLoop();
+        }, delay);
     }
 
-    // ============ MOVE — DIRECTION BASED ============
-    public void startMove(int direction) {
-        if (moveRunning) return;
-        moveRunning = true;
-        moveLoop(direction);
+    // ============ MOVEMENT (multiple parallel) ============
+    public void updateMove() {
+        boolean any = fwdActive || rightActive || liftActive;
+        if (any && !moveRunning) {
+            moveRunning = true;
+            moveLoop();
+        } else if (!any && moveRunning) {
+            moveRunning = false;
+            moveHandler.removeCallbacksAndMessages(null);
+        }
     }
 
-    public void stopMove() {
-        moveRunning = false;
-        moveHandler.removeCallbacksAndMessages(null);
-    }
-
-    public boolean isMoveRunning() { return moveRunning; }
-
-    private void moveLoop(int dir) {
+    private void moveLoop() {
         if (!moveRunning) return;
         int w = getResources().getDisplayMetrics().widthPixels;
         int h = getResources().getDisplayMetrics().heightPixels;
-
-        float sx, sy, ex, ey;
-
-        // Joystick area roughly bottom-left (screen ka 15-25% left, 75-85% down)
         float jx = w * 0.18f;
         float jy = h * 0.78f;
 
-        switch (dir) {
-            case DIR_FORWARD:
-                // Bottom → top (up ki taraf)
-                sx = jx;
-                sy = jy;
-                ex = jx;
-                ey = jy - h * 0.10f;
-                break;
-            case DIR_RIGHT:
-                // Left → right
-                sx = jx - w * 0.04f;
-                sy = jy;
-                ex = jx + w * 0.10f;
-                ey = jy;
-                break;
-            case DIR_LIFT:
-                // Screen ke center mein up swipe (lift/higher jump gesture)
-                sx = w * 0.5f;
-                sy = h * 0.55f;
-                ex = w * 0.5f;
-                ey = h * 0.30f;
-                break;
-            default:
-                sx = jx; sy = jy; ex = jx; ey = jy - h * 0.10f;
+        // Fire all active directions
+        if (fwdActive) {
+            swipe(jx, jy, jx, jy - h * 0.10f, 300 + random.nextInt(200));
+        }
+        if (rightActive) {
+            swipe(jx - w * 0.04f, jy, jx + w * 0.10f, jy, 300 + random.nextInt(200));
+        }
+        if (liftActive) {
+            swipe(w * 0.5f, h * 0.55f, w * 0.5f, h * 0.30f, 400 + random.nextInt(200));
         }
 
-        long dur = 300 + random.nextInt(200);
-        swipe(sx, sy, ex, ey, dur);
-
         long delay = 400 + random.nextInt(300);
-        moveHandler.postDelayed(() -> moveLoop(dir), delay);
+        moveHandler.postDelayed(this::moveLoop, delay);
     }
 
-    // ============ TEST TAP ============
-    public void testTap() {
-        droneTap();
+    public void setDirection(int dir, boolean active) {
+        if (dir == DIR_FORWARD) fwdActive = active;
+        if (dir == DIR_RIGHT) rightActive = active;
+        if (dir == DIR_LIFT) liftActive = active;
+        updateMove();
     }
+
+    // ============ CUSTOM BUTTONS ============
+    public void addCustomBtn(String name, float x, float y, long intervalMs, boolean loop) {
+        CustomBtn b = new CustomBtn(name, x, y, intervalMs, loop);
+        b.handler = new Handler(Looper.getMainLooper());
+        customBtns.add(b);
+        saveConfig();
+    }
+
+    public void removeCustomBtn(CustomBtn b) {
+        if (b.running) {
+            b.running = false;
+            if (b.handler != null) b.handler.removeCallbacksAndMessages(null);
+        }
+        customBtns.remove(b);
+        saveConfig();
+    }
+
+    public void startCustomBtn(CustomBtn b) {
+        if (b.running) return;
+        b.running = true;
+        if (b.loop && b.intervalMs > 0) {
+            customLoop(b);
+        } else {
+            // single shot
+            customTap(b);
+            b.running = false;
+        }
+    }
+
+    public void stopCustomBtn(CustomBtn b) {
+        b.running = false;
+        if (b.handler != null) b.handler.removeCallbacksAndMessages(null);
+    }
+
+    private void customLoop(CustomBtn b) {
+        if (!b.running) return;
+        customTap(b);
+        b.handler.postDelayed(() -> customLoop(b), b.intervalMs);
+    }
+
+    private void customTap(CustomBtn b) {
+        int w = getResources().getDisplayMetrics().widthPixels;
+        int h = getResources().getDisplayMetrics().heightPixels;
+        tap(w * b.xPercent, h * b.yPercent);
+    }
+
+    public void testTap() { droneTap(); }
 }
