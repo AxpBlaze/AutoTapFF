@@ -34,6 +34,8 @@ public class AutoTapService extends AccessibilityService {
     public float droneXPercent = 0.79f;
     public float droneYPercent = 0.83f;
     public int droneIntervalMs = 61000;
+    public int startIntervalMs = 540000;
+    public int skillIntervalMs = 90000;
 
     public float startXPercent = 0.87f;
     public float startYPercent = 0.89f;
@@ -137,12 +139,20 @@ public class AutoTapService extends AccessibilityService {
         try {
             android.content.Intent intent = getPackageManager()
                     .getLaunchIntentForPackage(packageName);
+            if (intent == null) {
+                intent = new android.content.Intent(android.content.Intent.ACTION_MAIN);
+                intent.addCategory(android.content.Intent.CATEGORY_LAUNCHER);
+                intent.setPackage(packageName);
+            }
             if (intent != null) {
-                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                        | android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT);
                 startActivity(intent);
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            android.util.Log.e("AXP", "launchApp: " + e.getMessage());
+        }
     }
 
     @Override
@@ -163,6 +173,8 @@ public class AutoTapService extends AccessibilityService {
         droneXPercent = p.getFloat("drone_x", 0.79f);
         droneYPercent = p.getFloat("drone_y", 0.83f);
         droneIntervalMs = p.getInt("drone_interval", 61000);
+        startIntervalMs = p.getInt("start_interval", 540000);
+        skillIntervalMs = p.getInt("skill_interval", 90000);
         randomize = p.getBoolean("randomize", true);
         vibrateOnTap = p.getBoolean("vibrate", true);
 
@@ -202,6 +214,8 @@ public class AutoTapService extends AccessibilityService {
                     .putFloat("drone_x", droneXPercent)
                     .putFloat("drone_y", droneYPercent)
                     .putInt("drone_interval", droneIntervalMs)
+                    .putInt("start_interval", startIntervalMs)
+                    .putInt("skill_interval", skillIntervalMs)
                     .putBoolean("randomize", randomize)
                     .putBoolean("vibrate", vibrateOnTap)
                     .putString("custom_btns", arr.toString())
@@ -293,7 +307,7 @@ public class AutoTapService extends AccessibilityService {
         int w = getResources().getDisplayMetrics().widthPixels;
         int h = getResources().getDisplayMetrics().heightPixels;
         tap(w * startXPercent, h * startYPercent);
-        startHandler.postDelayed(this::startTapLoop, 9 * 60 * 1000L);
+        startHandler.postDelayed(this::startTapLoop, startIntervalMs);
     }
 
     // ============ SKILL BUTTON 90 sec ============
@@ -315,7 +329,7 @@ public class AutoTapService extends AccessibilityService {
         int w = getResources().getDisplayMetrics().widthPixels;
         int h = getResources().getDisplayMetrics().heightPixels;
         tap(w * skillXPercent, h * skillYPercent);
-        skillHandler.postDelayed(this::skillTapLoop, 90 * 1000L);
+        skillHandler.postDelayed(this::skillTapLoop, skillIntervalMs);
     }
 
     // ============ ROTATE (4 modes) ============

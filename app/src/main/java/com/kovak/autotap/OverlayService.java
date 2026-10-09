@@ -126,6 +126,11 @@ public class OverlayService extends Service {
 
     private LinearLayout makeRow(String labelText, String btnText, TextView[] stateOut,
                                   View.OnClickListener listener) {
+        return makeRow(labelText, btnText, stateOut, listener, null);
+    }
+
+    private LinearLayout makeRow(String labelText, String btnText, TextView[] stateOut,
+                                  View.OnClickListener listener, View.OnLongClickListener longPress) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -154,6 +159,7 @@ public class OverlayService extends Service {
         btn.setElevation(3f);
         btn.setMinWidth(115);
         btn.setOnClickListener(listener);
+        if (longPress != null) btn.setOnLongClickListener(longPress);
         row.addView(btn);
 
         if (stateOut != null) stateOut[0] = btn;
@@ -198,15 +204,18 @@ public class OverlayService extends Service {
         // ---- SLOT 1: PRIMARY ----
         LinearLayout slot1 = makeSlot("PRIMARY");
         TextView[] dOut = new TextView[1];
-        slot1.addView(makeRow("DRONE  ·  61s", "OFF", dOut, v -> toggleDrone()));
+        slot1.addView(makeRow(droneLabel(), "OFF", dOut, v -> toggleDrone(),
+                v -> { showIntervalDialog("drone", "DRONE", droneLabel()); return true; }));
         droneState = dOut[0];
 
         TextView[] stOut = new TextView[1];
-        slot1.addView(makeRow("START  ·  9min", "OFF", stOut, v -> toggleStart()));
+        slot1.addView(makeRow(startLabel(), "OFF", stOut, v -> toggleStart(),
+                v -> { showIntervalDialog("start", "START", startLabel()); return true; }));
         startState = stOut[0];
 
         TextView[] skOut = new TextView[1];
-        slot1.addView(makeRow("SKILL  ·  90s", "OFF", skOut, v -> toggleSkill()));
+        slot1.addView(makeRow(skillLabel(), "OFF", skOut, v -> toggleSkill(),
+                v -> { showIntervalDialog("skill", "SKILL", skillLabel()); return true; }));
         skillState = skOut[0];
         rootLayout.addView(slot1);
 
