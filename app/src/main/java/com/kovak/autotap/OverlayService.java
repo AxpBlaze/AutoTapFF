@@ -1040,6 +1040,20 @@ public class OverlayService extends Service {
         } catch (Exception e) {}
     }
 
+    private void toggleAlt() {
+        if (!checkApi()) return;
+        AutoTapService s = AutoTapService.instance;
+        if (s == null) return;
+        altOn = !altOn;
+        if (altOn) {
+            s.startAlternate();
+            setBtn(altState, true, "ON · 15s");
+        } else {
+            s.stopAlternate();
+            setBtn(altState, false, "OFF");
+        }
+    }
+
     @Override
     public void onDestroy() {
         super.onDestroy();
