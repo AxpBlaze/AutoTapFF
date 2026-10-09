@@ -3,7 +3,6 @@ package com.kovak.autotap;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -19,8 +18,9 @@ public class OverlayService extends Service {
 
     private WindowManager wm;
     private View overlay;
+    private View hideTab;
     private LinearLayout rootLayout;
-    private TextView afkBtn, moveBtn, closeBtn;
+    private TextView afkBtn, moveBtn, hideBtn, closeBtn;
     private boolean afkOn = false;
     private boolean moveOn = false;
 
@@ -31,6 +31,7 @@ public class OverlayService extends Service {
         super.onCreate();
         wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
         buildOverlay();
+        buildHideTab();
     }
 
     private GradientDrawable bg(int color, float radius) {
@@ -61,7 +62,6 @@ public class OverlayService extends Service {
         rootLayout.setOrientation(LinearLayout.VERTICAL);
         rootLayout.setPadding(30, 30, 30, 30);
 
-        // glass-like dark background
         GradientDrawable containerBg = new GradientDrawable();
         containerBg.setColor(0xEE0F0F1A);
         containerBg.setCornerRadius(45f);
@@ -69,32 +69,30 @@ public class OverlayService extends Service {
         rootLayout.setBackground(containerBg);
         rootLayout.setElevation(20f);
 
-        // Header text
         TextView header = new TextView(this);
         header.setText("AXP");
         header.setTextColor(0xFF818CF8);
         header.setTextSize(14f);
         header.setGravity(Gravity.CENTER);
-        header.setLetterSpacing(0.3f);
         header.setPadding(0, 10, 0, 20);
         rootLayout.addView(header);
 
-        // AFK button
         afkBtn = makeBtn("AFK  OFF", 0xFFFFFFFF, 0xFF1E1E35);
         afkBtn.setOnClickListener(v -> toggleAfk());
         rootLayout.addView(afkBtn);
 
-        // MOVE button
         moveBtn = makeBtn("MOVE  OFF", 0xFFFFFFFF, 0xFF1E1E35);
         moveBtn.setOnClickListener(v -> toggleMove());
         rootLayout.addView(moveBtn);
 
-        // Close button
+        hideBtn = makeBtn("HIDE", 0xFFFFD200, 0xFF1E1E35);
+        hideBtn.setOnClickListener(v -> hideOverlay());
+        rootLayout.addView(hideBtn);
+
         closeBtn = makeBtn("CLOSE", 0xFFEF4444, 0xFF1E1E35);
         closeBtn.setOnClickListener(v -> stopSelf());
         rootLayout.addView(closeBtn);
 
-        // Draggable — long press to move
         rootLayout.setOnTouchListener(new View.OnTouchListener() {
             int startX, startY;
             float touchX, touchY;
@@ -106,10 +104,8 @@ public class OverlayService extends Service {
                 lp = (WindowManager.LayoutParams) rootLayout.getLayoutParams();
                 switch (e.getAction()) {
                     case MotionEvent.ACTION_DOWN:
-                        startX = lp.x;
-                        startY = lp.y;
-                        touchX = e.getRawX();
-                        touchY = e.getRawY();
+                        startX = lp.x; startY = lp.y;
+                        touchX = e.getRawX(); touchY = e.getRawY();
                         dragging = false;
                         return true;
                     case MotionEvent.ACTION_MOVE:
@@ -146,16 +142,81 @@ public class OverlayService extends Service {
         wm.addView(overlay, params);
     }
 
+    private void buildHideTab() {
+        TextView tab = new TextView(this);
+        tab.setText("A");
+        tab.setTextColor(0xFFFFFFFF);
+        tab.setTextSize(14f);
+        tab.setGravity(Gravity.CENTER);
+        tab.setWidth(80);
+        tab.setHeight(80);
+
+        GradientDrawable tabBg = new GradientDrawable();
+        tabBg.setColor(0xFF6366F1);
+        tabBg.setCornerRadius(50f);
+        tabBg.setStroke(3, 0xFF818CF8);
+        tab.setBackground(tabBg);
+
+        tab.setVisibility(View.GONE);
+        tab.setOnClickListener(v -> showOverlay());
+
+        tab.setOnTouchListener(new View.OnTouchListener() {
+            int startX, startY;
+            float touchX, touchY;
+            WindowManager.LayoutParams lp;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent e) {
+                lp = (WindowManager.LayoutParams) tab.getLayoutParams();
+                switch (e.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startX = lp.x; startY = lp.y;
+                        touchX = e.getRawX(); touchY = e.getRawY();
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        lp.x = startX + (int)(e.getRawX() - touchX);
+                        lp.y = startY + (int)(e.getRawY() - touchY);
+                        wm.updateViewLayout(tab, lp);
+                        return true;
+                }
+                return false;
+            }
+        });
+
+        int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : WindowManager.LayoutParams.TYPE_PHONE;
+
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                80, 80, type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT
+        );
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.x = 30;
+        params.y = 200;
+
+        hideTab = tab;
+        wm.addView(hideTab, params);
+    }
+
+    private void hideOverlay() {
+        rootLayout.setVisibility(View.GONE);
+        hideTab.setVisibility(View.VISIBLE);
+    }
+
+    private void showOverlay() {
+        rootLayout.setVisibility(View.VISIBLE);
+        hideTab.setVisibility(View.GONE);
+    }
+
     private void toggleAfk() {
         AutoTapService s = AutoTapService.instance;
-        if (s == null) {
-            afkBtn.setText("NO SERVICE");
-            return;
-        }
+        if (s == null) return;
         afkOn = !afkOn;
         if (afkOn) {
             s.startAfk();
-            afkBtn.setText("AFK  ON");
+            afkBtn.setText("AFK  ON · 61s");
             afkBtn.setTextColor(0xFF4ADE80);
             afkBtn.setBackground(bg(0xFF0F2A1F, 30f));
         } else {
@@ -188,8 +249,7 @@ public class OverlayService extends Service {
         super.onDestroy();
         AutoTapService s = AutoTapService.instance;
         if (s != null) { s.stopAfk(); s.stopMove(); }
-        if (overlay != null) {
-            try { wm.removeView(overlay); } catch (Exception e) {}
-        }
+        if (overlay != null) { try { wm.removeView(overlay); } catch (Exception e) {} }
+        if (hideTab != null) { try { wm.removeView(hideTab); } catch (Exception e) {} }
     }
 }
