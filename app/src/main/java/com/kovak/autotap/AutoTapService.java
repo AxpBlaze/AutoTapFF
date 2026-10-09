@@ -23,15 +23,12 @@ public class AutoTapService extends AccessibilityService {
     private Handler moveHandler = new Handler(Looper.getMainLooper());
     private Handler startHandler = new Handler(Looper.getMainLooper());
     private Handler skillHandler = new Handler(Looper.getMainLooper());
-    private Handler rotateHandler = new Handler(Looper.getMainLooper());
 
     private boolean droneRunning = false;
     private boolean moveRunning = false;
     private boolean startRunning = false;
     private boolean skillRunning = false;
-    private boolean rotateRunning = false;
 
-    private int rotateDirection = 1;
     private final Random random = new Random();
 
     public float droneXPercent = 0.79f;
