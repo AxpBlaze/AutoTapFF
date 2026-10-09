@@ -934,6 +934,114 @@ public class OverlayService extends Service {
         }
     }
 
+    private String fmtInterval(int ms) {
+        if (ms >= 60000) {
+            long m = ms / 60000;
+            if (ms % 60000 == 0) return m + "min";
+            return m + "m" + ((ms % 60000) / 1000) + "s";
+        }
+        return (ms / 1000) + "s";
+    }
+
+    private String droneLabel() {
+        AutoTapService sv = AutoTapService.instance;
+        int ms = (sv != null) ? sv.droneIntervalMs : 61000;
+        return "DRONE  ·  " + fmtInterval(ms);
+    }
+
+    private String startLabel() {
+        AutoTapService sv = AutoTapService.instance;
+        int ms = (sv != null) ? sv.startIntervalMs : 540000;
+        return "START  ·  " + fmtInterval(ms);
+    }
+
+    private String skillLabel() {
+        AutoTapService sv = AutoTapService.instance;
+        int ms = (sv != null) ? sv.skillIntervalMs : 90000;
+        return "SKILL  ·  " + fmtInterval(ms);
+    }
+
+    private void showIntervalDialog(String type, String title, String currentLabel) {
+        AutoTapService sv = AutoTapService.instance;
+        if (sv == null) return;
+        int currentMs;
+        if (type.equals("drone")) currentMs = sv.droneIntervalMs;
+        else if (type.equals("start")) currentMs = sv.startIntervalMs;
+        else currentMs = sv.skillIntervalMs;
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(40, 30, 40, 30);
+
+        TextView info = new TextView(this);
+        info.setText("Current: " + fmtInterval(currentMs));
+        info.setTextColor(0xFF000000);
+        info.setTextSize(14f);
+        box.addView(info);
+
+        TextView lbl = new TextView(this);
+        lbl.setText("New interval (seconds):");
+        lbl.setTextColor(0xFF000000);
+        lbl.setPadding(0, 20, 0, 0);
+        box.addView(lbl);
+
+        EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setText(String.valueOf(currentMs / 1000));
+        box.addView(input);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(title + "  ·  SET INTERVAL")
+                .setView(box)
+                .setPositiveButton("SAVE", (d, w) -> {
+                    try {
+                        int secs = Integer.parseInt(input.getText().toString().trim());
+                        if (secs < 1) secs = 1;
+                        if (secs > 3600) secs = 3600;
+                        int ms = secs * 1000;
+                        if (type.equals("drone")) sv.droneIntervalMs = ms;
+                        else if (type.equals("start")) sv.startIntervalMs = ms;
+                        else sv.skillIntervalMs = ms;
+                        sv.saveConfig();
+                        refreshLabelTexts();
+                    } catch (Exception e) {}
+                })
+                .setNegativeButton("CANCEL", null)
+                .create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        dialog.show();
+    }
+
+    private void refreshLabelTexts() {
+        try {
+            if (droneState != null) {
+                View p1 = (View) droneState.getParent();
+                if (p1 instanceof LinearLayout) {
+                    View l = ((LinearLayout) p1).getChildAt(0);
+                    if (l instanceof TextView) ((TextView) l).setText(droneLabel());
+                }
+            }
+            if (startState != null) {
+                View p2 = (View) startState.getParent();
+                if (p2 instanceof LinearLayout) {
+                    View l = ((LinearLayout) p2).getChildAt(0);
+                    if (l instanceof TextView) ((TextView) l).setText(startLabel());
+                }
+            }
+            if (skillState != null) {
+                View p3 = (View) skillState.getParent();
+                if (p3 instanceof LinearLayout) {
+                    View l = ((LinearLayout) p3).getChildAt(0);
+                    if (l instanceof TextView) ((TextView) l).setText(skillLabel());
+                }
+            }
+        } catch (Exception e) {}
+    }
+
     @Override
     public void onDestroy() {
         super.onDestroy();
