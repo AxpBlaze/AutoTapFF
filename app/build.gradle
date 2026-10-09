@@ -1,7 +1,9 @@
-apply plugin: 'com.android.application'
+plugins {
+    id 'com.android.application'
+}
 
 android {
-    namespace "com.kovak.autotap"
+    namespace 'com.kovak.autotap'
     compileSdk 34
 
     defaultConfig {
@@ -15,7 +17,6 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.debug
         }
     }
 
@@ -23,4 +24,7 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+}
+
+dependencies {
 }
