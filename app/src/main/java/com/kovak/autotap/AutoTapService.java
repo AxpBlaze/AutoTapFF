@@ -260,10 +260,21 @@ public class AutoTapService extends AccessibilityService {
         skillHandler.postDelayed(this::skillTapLoop, 90 * 1000L);
     }
 
-    // ============ ROTATE 120° ============
-    public void startRotate() {
-        if (rotateRunning) return;
+    // ============ ROTATE (4 modes) ============
+    private Handler rotateHandler = new Handler(Looper.getMainLooper());
+    private boolean rotateRunning = false;
+    private int rotateMode = 0; // 0=+120, 1=-120, 2=+360, 3=+210
+
+    public static final int ROT_P120 = 0;
+    public static final int ROT_N120 = 1;
+    public static final int ROT_P360 = 2;
+    public static final int ROT_P210 = 3;
+
+    public void startRotate(int mode) {
+        // Stop any existing rotate first
+        stopRotate();
         rotateRunning = true;
+        rotateMode = mode;
         rotateLoop();
     }
 
@@ -273,32 +284,47 @@ public class AutoTapService extends AccessibilityService {
     }
 
     public boolean isRotateRunning() { return rotateRunning; }
+    public int getRotateMode() { return rotateMode; }
 
     private void rotateLoop() {
         if (!rotateRunning) return;
+
         int w = getResources().getDisplayMetrics().widthPixels;
         int h = getResources().getDisplayMetrics().heightPixels;
 
-        float y = h * 0.45f;
-        float cx = w * 0.85f;
+        // Swipe from center-right horizontally
+        // Positive = clockwise (right→left swipe inverted), Negative = counter-clockwise
+        // 120° ≈ 3 swipes, 210° ≈ 5, 360° ≈ 9
+        int swipeCount;
+        boolean clockwise;
 
-        // 3 swipes = ~120°
-        for (int i = 0; i < 3; i++) {
-            if (!rotateRunning) return;
-            if (rotateDirection == 1) {
-                swipe(cx + w * 0.05f, y, cx - w * 0.05f, y, 200);
-            } else {
-                swipe(cx - w * 0.05f, y, cx + w * 0.05f, y, 200);
-            }
-            try { Thread.sleep(60); } catch (Exception e) {}
+        switch (rotateMode) {
+            case ROT_P120: swipeCount = 3; clockwise = true;  break;
+            case ROT_N120: swipeCount = 3; clockwise = false; break;
+            case ROT_P360: swipeCount = 9; clockwise = true;  break;
+            case ROT_P210: swipeCount = 5; clockwise = true;  break;
+            default:       swipeCount = 3; clockwise = true;
         }
 
-        rotateDirection = -rotateDirection;
-        // Single-shot: auto stop after one cycle
-        rotateRunning = false;
+        float cy = h * 0.45f;
+        float cx = w * 0.85f;
+        float dx = w * 0.06f;
+
+        for (int i = 0; i < swipeCount; i++) {
+            if (!rotateRunning) return;
+            if (clockwise) {
+                swipe(cx + dx, cy, cx - dx, cy, 180);
+            } else {
+                swipe(cx - dx, cy, cx + dx, cy, 180);
+            }
+            try { Thread.sleep(80); } catch (Exception e) {}
+        }
+
+        // Repeat every 3 seconds
+        rotateHandler.postDelayed(this::rotateLoop, 3000);
     }
 
-    // ============ MOVE ============
+// ============ MOVE ============
     public void updateMove() {
         boolean any = fwdActive || rightActive || liftActive;
         if (any && !moveRunning) {

@@ -30,11 +30,13 @@ public class OverlayService extends Service {
     private LinearLayout rootLayout;
     private LinearLayout btnContainer;
     private TextView droneState, startState, skillState;
-    private TextView fwdState, rightState, liftState, rotateState;
+    private TextView fwdState, rightState, liftState;
+    private TextView rotP120, rotN120, rotP360, rotP210;
     private TextView statsText;
     private TextView apiStatusText, apiExpiryText;
 
-    private boolean droneOn, startOn, skillOn, fwdOn, rightOn, liftOn, rotateOn;
+    private boolean droneOn, startOn, skillOn, fwdOn, rightOn, liftOn;
+    private int activeRotate = -1; // -1 = none, 0/1/2/3 = mode
 
     private Handler statsHandler = new Handler(Looper.getMainLooper());
     private Handler apiRefreshHandler = new Handler(Looper.getMainLooper());
@@ -220,9 +222,26 @@ public class OverlayService extends Service {
         slot2.addView(makeRow("LIFT", "OFF", lOut, v -> toggleLift()));
         liftState = lOut[0];
 
-        TextView[] roOut = new TextView[1];
-        slot2.addView(makeRow("ROTATE  ·  120°", "TAP", roOut, v -> doRotate()));
-        rotateState = roOut[0];
+        // 4 rotate modes — ek time pe ek
+        LinearLayout rotRow = new LinearLayout(this);
+        rotRow.setOrientation(LinearLayout.HORIZONTAL);
+        rotRow.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams rrlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        rrlp.setMargins(0, 6, 0, 4);
+        rotRow.setLayoutParams(rrlp);
+
+        rotP120 = makeRotBtn("+120°", 0);
+        rotN120 = makeRotBtn("-120°", 1);
+        rotP360 = makeRotBtn("+360°", 2);
+        rotP210 = makeRotBtn("+210°", 3);
+
+        rotRow.addView(rotP120);
+        rotRow.addView(rotN120);
+        rotRow.addView(rotP360);
+        rotRow.addView(rotP210);
+        slot2.addView(rotRow);
         rootLayout.addView(slot2);
 
         // ---- SLOT 3: CUSTOM ----
@@ -803,15 +822,64 @@ public class OverlayService extends Service {
         setBtn(liftState, liftOn, liftOn ? "ON" : "OFF");
     }
 
-    // ROTATE is now TAP-based (single-shot, auto-off after 120°)
-    private void doRotate() {
+    // Make small rotate button
+    private TextView makeRotBtn(String text, int mode) {
+        TextView b = new TextView(this);
+        b.setText(text);
+        b.setTextColor(C_TEXT);
+        b.setTextSize(10f);
+        b.setTypeface(Typeface.DEFAULT_BOLD);
+        b.setGravity(Gravity.CENTER);
+        b.setPadding(10, 12, 10, 12);
+        b.setBackground(bgStroke(C_CYAN_BG, C_BORDER, 18f));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        lp.setMargins(3, 0, 3, 0);
+        b.setLayoutParams(lp);
+        b.setTag(mode);
+        b.setOnClickListener(v -> toggleRotate(mode));
+        return b;
+    }
+
+    private TextView rotBtnFor(int mode) {
+        if (mode == 0) return rotP120;
+        if (mode == 1) return rotN120;
+        if (mode == 2) return rotP360;
+        return rotP210;
+    }
+
+    private void resetRotateBtns() {
+        for (int i = 0; i < 4; i++) {
+            TextView b = rotBtnFor(i);
+            if (b != null) {
+                b.setTextColor(C_TEXT);
+                b.setBackground(bgStroke(C_CYAN_BG, C_BORDER, 18f));
+            }
+        }
+    }
+
+    private void toggleRotate(int mode) {
         if (!checkApi()) return;
         AutoTapService s = AutoTapService.instance;
         if (s == null) return;
-        s.startRotate();
-        setBtn(rotateState, true, "ROTATING…");
-        // Auto-reset UI after ~2 sec
-        rotateState.postDelayed(() -> setBtn(rotateState, false, "TAP · 120°"), 2200);
+
+        // If same mode tapped → stop
+        if (activeRotate == mode) {
+            s.stopRotate();
+            activeRotate = -1;
+            resetRotateBtns();
+            return;
+        }
+
+        // Otherwise: stop old, start new
+        s.startRotate(mode);
+        activeRotate = mode;
+        resetRotateBtns();
+        TextView b = rotBtnFor(mode);
+        if (b != null) {
+            b.setTextColor(C_GREEN);
+            b.setBackground(bgGrad(C_GREEN_BG1, C_GREEN_BG2, 18f));
+        }
     }
 
     @Override
