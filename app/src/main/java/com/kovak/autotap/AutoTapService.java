@@ -15,22 +15,28 @@ public class AutoTapService extends AccessibilityService {
     public static AutoTapService instance;
     private static final String PREFS = "axp_prefs";
 
-    private Handler afkHandler = new Handler(Looper.getMainLooper());
+    private Handler droneHandler = new Handler(Looper.getMainLooper());
     private Handler moveHandler = new Handler(Looper.getMainLooper());
-    private boolean afkRunning = false;
+    private boolean droneRunning = false;
     private boolean moveRunning = false;
     private final Random random = new Random();
 
-    // Custom config
-    public int afkIntervalMs = 61000;
-    public float tapXPercent = 0.5f;
-    public float tapYPercent = 0.62f;
+    // Drone coordinates (percent of screen)
+    // Photo ke hisaab se drone icon roughly right-bottom area mein hai
+    public float droneXPercent = 0.79f;   // right side
+    public float droneYPercent = 0.83f;   // bottom-right drone area
+
+    public int droneIntervalMs = 61000;
     public boolean randomize = true;
-    public int randomJitterPx = 40;
     public boolean vibrateOnTap = true;
 
     public int tapCount = 0;
     public long startTime = 0;
+
+    // Movement direction
+    public static final int DIR_FORWARD = 1;
+    public static final int DIR_RIGHT = 2;
+    public static final int DIR_LIFT = 3;
 
     @Override
     public void onServiceConnected() {
@@ -45,16 +51,16 @@ public class AutoTapService extends AccessibilityService {
     @Override
     public void onDestroy() {
         instance = null;
-        afkRunning = false;
+        droneRunning = false;
         moveRunning = false;
         super.onDestroy();
     }
 
     public void loadConfig() {
         SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
-        afkIntervalMs = p.getInt("afk_interval", 61000);
-        tapXPercent = p.getFloat("tap_x", 0.5f);
-        tapYPercent = p.getFloat("tap_y", 0.62f);
+        droneXPercent = p.getFloat("drone_x", 0.79f);
+        droneYPercent = p.getFloat("drone_y", 0.83f);
+        droneIntervalMs = p.getInt("drone_interval", 61000);
         randomize = p.getBoolean("randomize", true);
         vibrateOnTap = p.getBoolean("vibrate", true);
     }
@@ -62,9 +68,9 @@ public class AutoTapService extends AccessibilityService {
     public void saveConfig() {
         SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
         p.edit()
-                .putInt("afk_interval", afkIntervalMs)
-                .putFloat("tap_x", tapXPercent)
-                .putFloat("tap_y", tapYPercent)
+                .putFloat("drone_x", droneXPercent)
+                .putFloat("drone_y", droneYPercent)
+                .putInt("drone_interval", droneIntervalMs)
                 .putBoolean("randomize", randomize)
                 .putBoolean("vibrate", vibrateOnTap)
                 .apply();
@@ -96,51 +102,49 @@ public class AutoTapService extends AccessibilityService {
         vibrate(60);
     }
 
-    // ============ CHARACTER TAP ============
-    // Character ke upar single click
-    public void characterTap() {
+    // ============ DRONE TAP ============
+    public void droneTap() {
         int w = getResources().getDisplayMetrics().widthPixels;
         int h = getResources().getDisplayMetrics().heightPixels;
-        float x = w * tapXPercent;
-        float y = h * tapYPercent;
+        float x = w * droneXPercent;
+        float y = h * droneYPercent;
         if (randomize) {
-            x += random.nextInt(randomJitterPx * 2) - randomJitterPx;
-            y += random.nextInt(randomJitterPx * 2) - randomJitterPx;
+            x += random.nextInt(20) - 10;
+            y += random.nextInt(20) - 10;
         }
         tap(x, y);
     }
 
-    // ============ AFK LOOP ============
-    public void startAfk() {
-        if (afkRunning) return;
-        afkRunning = true;
+    // ============ DRONE LOOP — 61s ============
+    public void startDrone() {
+        if (droneRunning) return;
+        droneRunning = true;
         startTime = System.currentTimeMillis();
-        afkLoop();
+        droneLoop();
     }
 
-    public void stopAfk() {
-        afkRunning = false;
-        afkHandler.removeCallbacksAndMessages(null);
+    public void stopDrone() {
+        droneRunning = false;
+        droneHandler.removeCallbacksAndMessages(null);
     }
 
-    public boolean isAfkRunning() { return afkRunning; }
+    public boolean isDroneRunning() { return droneRunning; }
 
-    private void afkLoop() {
-        if (!afkRunning) return;
-        characterTap();
+    private void droneLoop() {
+        if (!droneRunning) return;
+        droneTap();
 
-        long delay = afkIntervalMs;
-        if (randomize) delay += random.nextInt(10000) - 5000;
+        long delay = droneIntervalMs;
+        if (randomize) delay += random.nextInt(8000) - 4000;
         if (delay < 5000) delay = 5000;
-        afkHandler.postDelayed(this::afkLoop, delay);
+        droneHandler.postDelayed(this::droneLoop, delay);
     }
 
-    // ============ MOVE — FORWARD ONLY ============
-    // Aage ki taraf hi badhega — screen nahi ghumayega
-    public void startMove() {
+    // ============ MOVE — DIRECTION BASED ============
+    public void startMove(int direction) {
         if (moveRunning) return;
         moveRunning = true;
-        moveLoop();
+        moveLoop(direction);
     }
 
     public void stopMove() {
@@ -150,29 +154,52 @@ public class AutoTapService extends AccessibilityService {
 
     public boolean isMoveRunning() { return moveRunning; }
 
-    private void moveLoop() {
+    private void moveLoop(int dir) {
         if (!moveRunning) return;
-
         int w = getResources().getDisplayMetrics().widthPixels;
         int h = getResources().getDisplayMetrics().heightPixels;
 
-        // Forward movement: bottom-center → top-center (aage badhna)
-        // Screen nahi ghumayega — sirf character aage chalega
-        float startX = w * 0.5f;
-        float startY = h * 0.70f;   // joystick zone
-        float endX   = w * 0.5f;
-        float endY   = h * 0.45f;   // up ki taraf swipe
+        float sx, sy, ex, ey;
 
-        long dur = 800 + random.nextInt(400);
-        swipe(startX, startY, endX, endY, dur);
+        // Joystick area roughly bottom-left (screen ka 15-25% left, 75-85% down)
+        float jx = w * 0.18f;
+        float jy = h * 0.78f;
 
-        // Next swipe after short gap
-        long delay = 1000 + random.nextInt(600);
-        moveHandler.postDelayed(this::moveLoop, delay);
+        switch (dir) {
+            case DIR_FORWARD:
+                // Bottom → top (up ki taraf)
+                sx = jx;
+                sy = jy;
+                ex = jx;
+                ey = jy - h * 0.10f;
+                break;
+            case DIR_RIGHT:
+                // Left → right
+                sx = jx - w * 0.04f;
+                sy = jy;
+                ex = jx + w * 0.10f;
+                ey = jy;
+                break;
+            case DIR_LIFT:
+                // Screen ke center mein up swipe (lift/higher jump gesture)
+                sx = w * 0.5f;
+                sy = h * 0.55f;
+                ex = w * 0.5f;
+                ey = h * 0.30f;
+                break;
+            default:
+                sx = jx; sy = jy; ex = jx; ey = jy - h * 0.10f;
+        }
+
+        long dur = 300 + random.nextInt(200);
+        swipe(sx, sy, ex, ey, dur);
+
+        long delay = 400 + random.nextInt(300);
+        moveHandler.postDelayed(() -> moveLoop(dir), delay);
     }
 
     // ============ TEST TAP ============
     public void testTap() {
-        characterTap();
+        droneTap();
     }
 }

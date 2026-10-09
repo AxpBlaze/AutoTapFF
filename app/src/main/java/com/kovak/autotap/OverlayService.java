@@ -23,10 +23,13 @@ public class OverlayService extends Service {
     private View overlay;
     private View hideTab;
     private LinearLayout rootLayout;
-    private TextView afkState, moveState, charState;
+    private TextView droneState, fwdState, rightState, liftState;
     private TextView statsText;
-    private boolean afkOn = false;
-    private boolean moveOn = false;
+
+    private boolean droneOn = false;
+    private boolean fwdOn = false;
+    private boolean rightOn = false;
+    private boolean liftOn = false;
 
     private Handler statsHandler = new Handler(Looper.getMainLooper());
 
@@ -55,7 +58,6 @@ public class OverlayService extends Service {
         return g;
     }
 
-    /** Row: label on left, button on right */
     private LinearLayout makeRow(String labelText, String btnText, int btnColor,
                                   View.OnClickListener listener, TextView[] stateOut) {
         LinearLayout row = new LinearLayout(this);
@@ -64,32 +66,30 @@ public class OverlayService extends Service {
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        rlp.setMargins(0, 6, 0, 6);
+        rlp.setMargins(0, 5, 0, 5);
         row.setLayoutParams(rlp);
 
-        // Label
         TextView label = new TextView(this);
         label.setText(labelText);
         label.setTextColor(0xFF9CA3AF);
         label.setTextSize(11f);
-        label.setLetterSpacing(0.15f);
+        label.setLetterSpacing(0.12f);
         label.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         label.setLayoutParams(llp);
         row.addView(label);
 
-        // Button
         TextView btn = new TextView(this);
         btn.setText(btnText);
         btn.setTextColor(0xFFFFFFFF);
-        btn.setTextSize(12f);
+        btn.setTextSize(11f);
         btn.setTypeface(Typeface.DEFAULT_BOLD);
         btn.setGravity(Gravity.CENTER);
-        btn.setPadding(30, 22, 30, 22);
-        btn.setBackground(bgSolid(btnColor, 30f));
+        btn.setPadding(28, 20, 28, 20);
+        btn.setBackground(bgSolid(btnColor, 28f));
         btn.setElevation(4f);
-        btn.setMinWidth(140);
+        btn.setMinWidth(130);
         btn.setOnClickListener(listener);
         row.addView(btn);
 
@@ -107,7 +107,7 @@ public class OverlayService extends Service {
         rootLayout.setBackground(containerBg);
         rootLayout.setElevation(25f);
 
-        // Header row
+        // Header
         LinearLayout headerRow = new LinearLayout(this);
         headerRow.setOrientation(LinearLayout.HORIZONTAL);
         headerRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -132,7 +132,7 @@ public class OverlayService extends Service {
         View divider = new View(this);
         LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 2);
-        dlp.setMargins(0, 12, 0, 12);
+        dlp.setMargins(0, 10, 0, 10);
         divider.setLayoutParams(dlp);
         divider.setBackgroundColor(0xFF1E1E35);
         rootLayout.addView(divider);
@@ -142,43 +142,43 @@ public class OverlayService extends Service {
         statsText.setText("Taps  0    ·    Idle");
         statsText.setTextColor(0xFF6B6B80);
         statsText.setTextSize(10f);
-        statsText.setLetterSpacing(0.1f);
         statsText.setGravity(Gravity.CENTER);
-        statsText.setPadding(0, 0, 0, 14);
+        statsText.setPadding(0, 0, 0, 12);
         rootLayout.addView(statsText);
 
-        // AFK row
-        TextView[] afkOut = new TextView[1];
-        LinearLayout afkRow = makeRow("AFK  TAP", "OFF", 0xFF1E1E35,
-                v -> toggleAfk(), afkOut);
-        afkState = afkOut[0];
-        rootLayout.addView(afkRow);
+        // DRONE row
+        TextView[] droneOut = new TextView[1];
+        rootLayout.addView(makeRow("DRONE  ·  61s", "OFF", 0xFF1E1E35,
+                v -> toggleDrone(), droneOut));
+        droneState = droneOut[0];
 
-        // CHARACTER row
-        TextView[] charOut = new TextView[1];
-        LinearLayout charRow = makeRow("CHARACTER", "TAP", 0xFF1E1E35,
-                v -> characterTap(), charOut);
-        charState = charOut[0];
-        rootLayout.addView(charRow);
+        // FORWARD row
+        TextView[] fwdOut = new TextView[1];
+        rootLayout.addView(makeRow("FORWARD", "OFF", 0xFF1E1E35,
+                v -> toggleFwd(), fwdOut));
+        fwdState = fwdOut[0];
 
-        // MOVE row
-        TextView[] moveOut = new TextView[1];
-        LinearLayout moveRow = makeRow("MOVE", "OFF", 0xFF1E1E35,
-                v -> toggleMove(), moveOut);
-        moveState = moveOut[0];
-        rootLayout.addView(moveRow);
+        // RIGHT row
+        TextView[] rightOut = new TextView[1];
+        rootLayout.addView(makeRow("RIGHT", "OFF", 0xFF1E1E35,
+                v -> toggleRight(), rightOut));
+        rightState = rightOut[0];
+
+        // LIFT row
+        TextView[] liftOut = new TextView[1];
+        rootLayout.addView(makeRow("LIFT", "OFF", 0xFF1E1E35,
+                v -> toggleLift(), liftOut));
+        liftState = liftOut[0];
 
         // HIDE row
         TextView[] hideOut = new TextView[1];
-        LinearLayout hideRow = makeRow("PANEL", "HIDE", 0xFF1E1E35,
-                v -> hideOverlay(), hideOut);
-        rootLayout.addView(hideRow);
+        rootLayout.addView(makeRow("PANEL", "HIDE", 0xFF1E1E35,
+                v -> hideOverlay(), hideOut));
 
         // CLOSE row
         TextView[] closeOut = new TextView[1];
         LinearLayout closeRow = makeRow("STOP", "CLOSE", 0xFF2A1414,
                 v -> stopSelf(), closeOut);
-        closeRow.getChildAt(1).setBackground(bgSolid(0xFF2A1414, 30f));
         ((TextView) closeRow.getChildAt(1)).setTextColor(0xFFEF4444);
         rootLayout.addView(closeRow);
 
@@ -246,11 +246,14 @@ public class OverlayService extends Service {
         tab.setElevation(20f);
 
         tab.setVisibility(View.GONE);
+        tab.setClickable(true);
+        tab.setFocusable(true);
         tab.setOnClickListener(v -> showOverlay());
 
         tab.setOnTouchListener(new View.OnTouchListener() {
             int startX, startY;
             float touchX, touchY;
+            boolean dragging = false;
             WindowManager.LayoutParams lp;
 
             @Override
@@ -260,11 +263,23 @@ public class OverlayService extends Service {
                     case MotionEvent.ACTION_DOWN:
                         startX = lp.x; startY = lp.y;
                         touchX = e.getRawX(); touchY = e.getRawY();
+                        dragging = false;
                         return true;
                     case MotionEvent.ACTION_MOVE:
-                        lp.x = startX + (int)(e.getRawX() - touchX);
-                        lp.y = startY + (int)(e.getRawY() - touchY);
-                        wm.updateViewLayout(tab, lp);
+                        int dx = (int)(e.getRawX() - touchX);
+                        int dy = (int)(e.getRawY() - touchY);
+                        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) dragging = true;
+                        if (dragging) {
+                            lp.x = startX + dx;
+                            lp.y = startY + dy;
+                            wm.updateViewLayout(tab, lp);
+                        }
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        if (!dragging) {
+                            // tap → show panel
+                            v.performClick();
+                        }
                         return true;
                 }
                 return false;
@@ -292,7 +307,7 @@ public class OverlayService extends Service {
             @Override
             public void run() {
                 AutoTapService s = AutoTapService.instance;
-                if (s != null && afkOn) {
+                if (s != null && droneOn) {
                     long elapsed = (System.currentTimeMillis() - s.startTime) / 1000;
                     long mins = elapsed / 60;
                     long secs = elapsed % 60;
@@ -310,57 +325,96 @@ public class OverlayService extends Service {
     private void hideOverlay() {
         rootLayout.setVisibility(View.GONE);
         hideTab.setVisibility(View.VISIBLE);
+        hideTab.bringToFront();
     }
 
     private void showOverlay() {
         rootLayout.setVisibility(View.VISIBLE);
         hideTab.setVisibility(View.GONE);
+        rootLayout.bringToFront();
     }
 
-    private void characterTap() {
-        AutoTapService s = AutoTapService.instance;
-        if (s != null) s.characterTap();
-    }
-
-    private void toggleAfk() {
+    private void toggleDrone() {
         AutoTapService s = AutoTapService.instance;
         if (s == null) return;
-        afkOn = !afkOn;
-        if (afkOn) {
-            s.startAfk();
-            afkState.setText("ON  ·  61s");
-            afkState.setTextColor(0xFF4ADE80);
-            afkState.setBackground(bgGrad(0xFF0F2A1F, 0xFF0A1A12, 30f));
+        droneOn = !droneOn;
+        if (droneOn) {
+            s.startDrone();
+            droneState.setText("ON  ·  61s");
+            droneState.setTextColor(0xFF4ADE80);
+            droneState.setBackground(bgGrad(0xFF0F2A1F, 0xFF0A1A12, 28f));
         } else {
-            s.stopAfk();
-            afkState.setText("OFF");
-            afkState.setTextColor(0xFFFFFFFF);
-            afkState.setBackground(bgSolid(0xFF1E1E35, 30f));
+            s.stopDrone();
+            droneState.setText("OFF");
+            droneState.setTextColor(0xFFFFFFFF);
+            droneState.setBackground(bgSolid(0xFF1E1E35, 28f));
         }
     }
 
-    private void toggleMove() {
+    private void toggleFwd() {
         AutoTapService s = AutoTapService.instance;
         if (s == null) return;
-        moveOn = !moveOn;
-        if (moveOn) {
-            s.startMove();
-            moveState.setText("ON  ·  FWD");
-            moveState.setTextColor(0xFF4ADE80);
-            moveState.setBackground(bgGrad(0xFF0F2A1F, 0xFF0A1A12, 30f));
+        // stop others first
+        if (rightOn) { rightOn = false; resetBtn(rightState, "OFF"); }
+        if (liftOn) { liftOn = false; resetBtn(liftState, "OFF"); }
+        fwdOn = !fwdOn;
+        if (fwdOn) {
+            s.startMove(AutoTapService.DIR_FORWARD);
+            fwdState.setText("ON  ·  FWD");
+            fwdState.setTextColor(0xFF4ADE80);
+            fwdState.setBackground(bgGrad(0xFF0F2A1F, 0xFF0A1A12, 28f));
         } else {
             s.stopMove();
-            moveState.setText("OFF");
-            moveState.setTextColor(0xFFFFFFFF);
-            moveState.setBackground(bgSolid(0xFF1E1E35, 30f));
+            resetBtn(fwdState, "OFF");
         }
+    }
+
+    private void toggleRight() {
+        AutoTapService s = AutoTapService.instance;
+        if (s == null) return;
+        if (fwdOn) { fwdOn = false; resetBtn(fwdState, "OFF"); }
+        if (liftOn) { liftOn = false; resetBtn(liftState, "OFF"); }
+        rightOn = !rightOn;
+        if (rightOn) {
+            s.startMove(AutoTapService.DIR_RIGHT);
+            rightState.setText("ON  ·  R");
+            rightState.setTextColor(0xFF4ADE80);
+            rightState.setBackground(bgGrad(0xFF0F2A1F, 0xFF0A1A12, 28f));
+        } else {
+            s.stopMove();
+            resetBtn(rightState, "OFF");
+        }
+    }
+
+    private void toggleLift() {
+        AutoTapService s = AutoTapService.instance;
+        if (s == null) return;
+        if (fwdOn) { fwdOn = false; resetBtn(fwdState, "OFF"); }
+        if (rightOn) { rightOn = false; resetBtn(rightState, "OFF"); }
+        liftOn = !liftOn;
+        if (liftOn) {
+            s.startMove(AutoTapService.DIR_LIFT);
+            liftState.setText("ON  ·  LIFT");
+            liftState.setTextColor(0xFF4ADE80);
+            liftState.setBackground(bgGrad(0xFF0F2A1F, 0xFF0A1A12, 28f));
+        } else {
+            s.stopMove();
+            resetBtn(liftState, "OFF");
+        }
+    }
+
+    private void resetBtn(TextView btn, String text) {
+        if (btn == null) return;
+        btn.setText(text);
+        btn.setTextColor(0xFFFFFFFF);
+        btn.setBackground(bgSolid(0xFF1E1E35, 28f));
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
         AutoTapService s = AutoTapService.instance;
-        if (s != null) { s.stopAfk(); s.stopMove(); s.saveConfig(); }
+        if (s != null) { s.stopDrone(); s.stopMove(); s.saveConfig(); }
         if (overlay != null) { try { wm.removeView(overlay); } catch (Exception e) {} }
         if (hideTab != null) { try { wm.removeView(hideTab); } catch (Exception e) {} }
         statsHandler.removeCallbacksAndMessages(null);
