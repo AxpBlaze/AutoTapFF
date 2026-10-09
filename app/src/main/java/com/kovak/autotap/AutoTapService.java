@@ -155,6 +155,36 @@ public class AutoTapService extends AccessibilityService {
         }
     }
 
+    // ============ AUTO-ALTERNATE FF <-> FF MAX (15s each) ============
+    private Handler altHandler = new Handler(Looper.getMainLooper());
+    private boolean altRunning = false;
+    private boolean altShowFF = true; // true = FF, false = FF Max
+
+    public void startAlternate() {
+        if (altRunning) return;
+        altRunning = true;
+        altShowFF = true;
+        altLoop();
+    }
+
+    public void stopAlternate() {
+        altRunning = false;
+        altHandler.removeCallbacksAndMessages(null);
+    }
+
+    public boolean isAltRunning() { return altRunning; }
+
+    private void altLoop() {
+        if (!altRunning) return;
+        if (altShowFF) {
+            launchApp(PKG_FF);
+        } else {
+            launchApp(PKG_FFMAX);
+        }
+        altShowFF = !altShowFF;
+        altHandler.postDelayed(this::altLoop, 15000);
+    }
+
     @Override
     public void onDestroy() {
         instance = null;
@@ -165,6 +195,7 @@ public class AutoTapService extends AccessibilityService {
         rotateRunning = false;
         ffLaunchRunning = false;
         ffMaxLaunchRunning = false;
+        altRunning = false;
         super.onDestroy();
     }
 

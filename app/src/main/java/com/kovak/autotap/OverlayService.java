@@ -34,7 +34,8 @@ public class OverlayService extends Service {
     private TextView rotP120, rotN120, rotP360, rotP210;
     private TextView statsText;
     private TextView apiStatusText, apiExpiryText;
-    private TextView ffState, ffMaxState;
+    private TextView ffState, ffMaxState, altState;
+    private boolean altOn;
     private boolean ffOn, ffMaxOn;
 
     private boolean droneOn, startOn, skillOn, fwdOn, rightOn, liftOn;
@@ -315,15 +316,11 @@ public class OverlayService extends Service {
         rootLayout.addView(slot4);
 
         // ---- AUTO LAUNCH SLOT ----
-        LinearLayout slotLaunch = makeSlot("AUTO LAUNCH  ·  8s");
+        LinearLayout slotLaunch = makeSlot("AUTO LAUNCH  ·  15s each");
         
-        TextView[] ffOut = new TextView[1];
-        slotLaunch.addView(makeRow("FREE FIRE", "OFF", ffOut, v -> toggleFF()));
-        ffState = ffOut[0];
-
-        TextView[] ffMaxOut = new TextView[1];
-        slotLaunch.addView(makeRow("FREE FIRE MAX", "OFF", ffMaxOut, v -> toggleFFMax()));
-        ffMaxState = ffMaxOut[0];
+        TextView[] altOut = new TextView[1];
+        slotLaunch.addView(makeRow("FF ↔ FF MAX", "OFF", altOut, v -> toggleAlt()));
+        altState = altOut[0];
 
         rootLayout.addView(slotLaunch);
 
@@ -1048,7 +1045,7 @@ public class OverlayService extends Service {
         AutoTapService s = AutoTapService.instance;
         if (s != null) {
             s.stopDrone(); s.stopStartButton(); s.stopSkillButton(); s.stopRotate();
-            s.stopFFLaunch(); s.stopFFMaxLaunch();
+            s.stopFFLaunch(); s.stopFFMaxLaunch(); s.stopAlternate();
             s.saveConfig();
         }
         if (overlay != null) { try { wm.removeView(overlay); } catch (Exception e) {} }
