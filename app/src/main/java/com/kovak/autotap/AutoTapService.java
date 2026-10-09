@@ -2,15 +2,18 @@ package com.kovak.autotap;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
+import android.content.SharedPreferences;
 import android.graphics.Path;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Vibrator;
 import android.view.accessibility.AccessibilityEvent;
 import java.util.Random;
 
 public class AutoTapService extends AccessibilityService {
 
     public static AutoTapService instance;
+    private static final String PREFS = "axp_prefs";
 
     private Handler afkHandler = new Handler(Looper.getMainLooper());
     private Handler moveHandler = new Handler(Looper.getMainLooper());
@@ -19,10 +22,23 @@ public class AutoTapService extends AccessibilityService {
     private int moveDirection = 1;
     private final Random random = new Random();
 
+    // Custom config
+    public int afkIntervalMs = 61000;
+    public float tapXPercent = 0.5f;
+    public float tapYPercent = 0.62f;
+    public boolean randomize = true;
+    public int randomJitterPx = 40;
+    public boolean vibrateOnTap = true;
+    public boolean appWhitelistOnly = false;
+
+    public int tapCount = 0;
+    public long startTime = 0;
+
     @Override
     public void onServiceConnected() {
         super.onServiceConnected();
         instance = this;
+        loadConfig();
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent e) {}
@@ -36,11 +52,44 @@ public class AutoTapService extends AccessibilityService {
         super.onDestroy();
     }
 
+    public void loadConfig() {
+        SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
+        afkIntervalMs = p.getInt("afk_interval", 61000);
+        tapXPercent = p.getFloat("tap_x", 0.5f);
+        tapYPercent = p.getFloat("tap_y", 0.62f);
+        randomize = p.getBoolean("randomize", true);
+        vibrateOnTap = p.getBoolean("vibrate", true);
+        appWhitelistOnly = p.getBoolean("whitelist", false);
+    }
+
+    public void saveConfig() {
+        SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
+        p.edit()
+                .putInt("afk_interval", afkIntervalMs)
+                .putFloat("tap_x", tapXPercent)
+                .putFloat("tap_y", tapYPercent)
+                .putBoolean("randomize", randomize)
+                .putBoolean("vibrate", vibrateOnTap)
+                .putBoolean("whitelist", appWhitelistOnly)
+                .apply();
+    }
+
+    private void vibrate(long ms) {
+        if (!vibrateOnTap) return;
+        try {
+            Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+            if (v != null) v.vibrate(ms);
+        } catch (Exception e) {}
+    }
+
+    // ============ TAP ============
     public void tap(float x, float y) {
         Path p = new Path(); p.moveTo(x, y);
         GestureDescription.Builder b = new GestureDescription.Builder();
         b.addStroke(new GestureDescription.StrokeDescription(p, 0, 50));
         dispatchGesture(b.build(), null, null);
+        tapCount++;
+        vibrate(40);
     }
 
     public void swipe(float x1, float y1, float x2, float y2, long dur) {
@@ -48,12 +97,14 @@ public class AutoTapService extends AccessibilityService {
         GestureDescription.Builder b = new GestureDescription.Builder();
         b.addStroke(new GestureDescription.StrokeDescription(p, 0, dur));
         dispatchGesture(b.build(), null, null);
+        vibrate(60);
     }
 
-    // AFK — 61 second exact
+    // ============ AFK ============
     public void startAfk() {
         if (afkRunning) return;
         afkRunning = true;
+        startTime = System.currentTimeMillis();
         afkLoop();
     }
 
@@ -62,20 +113,35 @@ public class AutoTapService extends AccessibilityService {
         afkHandler.removeCallbacksAndMessages(null);
     }
 
+    public boolean isAfkRunning() { return afkRunning; }
+    public boolean isMoveRunning() { return moveRunning; }
+
     private void afkLoop() {
         if (!afkRunning) return;
+
         int w = getResources().getDisplayMetrics().widthPixels;
         int h = getResources().getDisplayMetrics().heightPixels;
 
-        // Character ke upar — screen center-bottom third
-        float x = w * 0.5f + random.nextInt(80) - 40;
-        float y = h * 0.62f + random.nextInt(60) - 30;
+        float x = w * tapXPercent;
+        float y = h * tapYPercent;
+
+        if (randomize) {
+            x += random.nextInt(randomJitterPx * 2) - randomJitterPx;
+            y += random.nextInt(randomJitterPx * 2) - randomJitterPx;
+        }
 
         tap(x, y);
-        afkHandler.postDelayed(this::afkLoop, 61000);
+
+        long delay = afkIntervalMs;
+        if (randomize) {
+            delay += random.nextInt(10000) - 5000; // ±5 sec
+        }
+        if (delay < 5000) delay = 5000;
+
+        afkHandler.postDelayed(this::afkLoop, delay);
     }
 
-    // MOVE continuous
+    // ============ MOVE ============
     public void startMove() {
         if (moveRunning) return;
         moveRunning = true;
@@ -103,5 +169,12 @@ public class AutoTapService extends AccessibilityService {
         long dur = 500 + random.nextInt(400);
         swipe(startX, centerY, endX, centerY, dur);
         moveHandler.postDelayed(this::moveLoop, 800 + random.nextInt(500));
+    }
+
+    // ============ TEST TAP ============
+    public void testTap() {
+        int w = getResources().getDisplayMetrics().widthPixels;
+        int h = getResources().getDisplayMetrics().heightPixels;
+        tap(w * tapXPercent, h * tapYPercent);
     }
 }
